@@ -6,11 +6,29 @@
   </div>
 
   <div class="grid">
-    <article class="card">
+        <article class="card">
       <h2>Importer</h2>
       <label>Titre<input [formControl]="title" /></label>
-      <label>Fichier audio<input type="file" accept="audio/*" (change)="choose($event)" /></label>
-      <button type="button" (click)="upload()" [disabled]="!file">Envoyer</button>
+      <label>Fichier audio
+        <input #fileInput type="file" accept="audio/*" (change)="choose($event)" [disabled]="uploading()" />
+      </label>
+
+      @if (uploading()) {
+        <div class="progress" role="status">
+          <progress max="100" [value]="uploadProgress()" aria-label="Progression de l'envoi"></progress>
+          <span>{{ uploadProgress() < 100 ? uploadProgress() + ' %' : 'Finalisation…' }}</span>
+        </div>
+      }
+      @if (uploadError()) {
+        <p class="error" role="alert">{{ uploadError() }}</p>
+      }
+      @if (uploadSuccess()) {
+        <p class="success" role="status">{{ uploadSuccess() }}</p>
+      }
+
+      <button type="button" (click)="upload()" [disabled]="!file || uploading()">
+        {{ uploading() ? 'Envoi en cours…' : 'Envoyer' }}
+      </button>
     </article>
 
     <article class="card">
@@ -18,27 +36,58 @@
         <h2>Mes pistes</h2>
         <button type="button" (click)="load()">Actualiser</button>
       </div>
+
       @if (loading()) {
-        <p>Chargement…</p>
+        <p class="status">Chargement…</p>
       }
-      @for (track of tracks(); track track.id) {
-        <div class="track">
-          <div>
-            <b>{{ track.title }}</b>
-            <small>{{ track.originalName }} · {{ track.size }} Ko</small>
-          </div>
-          <button type="button" (click)="play(track)" [attr.aria-label]="'Lire ' + track.title">▶</button>
-        </div>
-      } @empty {
-        <p>Aucune piste.</p>
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
       }
+
+      <div class="tracks-grid">
+        @for (track of tracks(); track track.id) {
+          <article class="track-card" [class.playing]="playingId() === track.id">
+            <div class="track-card__top">
+              <span class="format-badge">{{ formatExt(track.originalName) }}</span>
+              <button
+                type="button"
+                class="play-btn"
+                (click)="play(track)"
+                [attr.aria-label]="'Lire ' + track.title"
+              >
+                <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+              </button>
+            </div>
+            <b class="track-card__title">{{ track.title }}</b>
+            <small class="track-card__file">{{ track.originalName }}</small>
+            <small class="track-card__meta">{{ formatSize(track.size) }} · {{ formatDate(track.createdAt) }}</small>
+                        <div class="track-card__actions">
+              <button
+                type="button"
+                class="delete-btn"
+                (click)="remove(track)"
+                [disabled]="deletingId() !== null"
+                [attr.aria-label]="'Supprimer ' + track.title"
+              >
+                {{ deletingId() === track.id ? 'Suppression…' : 'Supprimer' }}
+              </button>
+            </div>
+          </article>
+        } @empty {
+          @if (!loading()) {
+            <p class="empty-state">Aucune piste pour l'instant — importe ton premier fichier audio ci-dessus.</p>
+          }
+        }
+      </div>
+
       <div class="pager">
         <button type="button" (click)="go(page() - 1)" [disabled]="page() === 1">Préc.</button>
         <span>Page {{ page() }} / {{ pages() }}</span>
         <button type="button" (click)="go(page() + 1)" [disabled]="page() === pages()">Suiv.</button>
       </div>
+
       @if (audioUrl()) {
-        <audio [src]="audioUrl()" controls autoplay></audio>
+        <audio [src]="audioUrl()" controls autoplay (ended)="playingId.set(null)"></audio>
       }
     </article>
   </div>

@@ -8,17 +8,24 @@ import { Track } from '../models/track.model';
 export class TrackService {
   private readonly http = inject(HttpClient);
 
-  list(page = 1, limit = 5) {
+    list(page = 1, limit = 5) {
     return this.http.get<Page<Track>>('/api/tracks', {
       params: { page, limit },
     });
   }
 
-  upload(file: File, title: string) {
+    upload(file: File, title: string) {
     const body = new FormData();
     body.append('audio', file);
     body.append('title', title);
-    return this.http.post<Track>('/api/tracks', body);
+    return this.http.post<Track>('/api/tracks', body, {
+      reportProgress: true,
+      observe: 'events',
+    });
+  }
+
+  delete(id: string) {
+    return this.http.delete<void>(`/api/tracks/${id}`);
   }
 
   audio(id: string) {

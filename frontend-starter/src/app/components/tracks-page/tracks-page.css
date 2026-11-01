@@ -1,1 +1,139 @@
 :host { display: block; }
+
+.status { color: #61756f; }
+.success { color: #1d755e; }
+
+.tracks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.track-card {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem;
+  border: 1px solid #e1ebe7;
+  border-radius: 12px;
+  background: #fbfdfc;
+  transition: border-color 0.15s ease;
+}
+
+.track-card.playing {
+  border-color: #c8892e;
+}
+
+.track-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.format-badge {
+  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #1d755e;
+  background: #e4efe9;
+  border-radius: 999px;
+}
+
+.play-btn {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 50%;
+  background: #1d755e;
+}
+
+.track-card.playing .play-btn {
+  background: #c8892e;
+}
+
+.eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 0.9rem;
+}
+
+.eq i {
+  display: block;
+  width: 3px;
+  height: 40%;
+  background: white;
+  border-radius: 1px;
+}
+
+.track-card.playing .eq i {
+  animation: eq-bounce 0.9s ease-in-out infinite;
+}
+.track-card.playing .eq i:nth-child(2) { animation-delay: 0.15s; }
+.track-card.playing .eq i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes eq-bounce {
+  0%, 100% { height: 30%; }
+  50% { height: 90%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eq i { animation: none !important; }
+}
+
+.track-card__title { font-size: 0.95rem; }
+.track-card__file,
+.track-card__meta { color: #61756f; }
+
+.empty-state {
+  padding: 1.5rem;
+  color: #61756f;
+  text-align: center;
+  border: 1px dashed #b8cbc5;
+  border-radius: 12px;
+}
+
+.pager { margin: 1rem 0; }
+audio { width: 100%; margin-top: 0.5rem; }
+.error { color: #a33; }
+
+.track-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.delete-btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  color: #a33;
+  background: transparent;
+  border: 1px solid #e3c4c4;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #fbeeee;
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.6rem 0;
+}
+
+.progress progress {
+  flex: 1;
+  height: 0.6rem;
+  accent-color: #1d755e;
+}
+
+.progress span {
+  min-width: 5.5rem;
+  font-size: 0.85rem;
+  color: #61756f;
+  text-align: right;
+}
