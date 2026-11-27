@@ -28,6 +28,9 @@ export class TracksPageComponent implements OnDestroy {
   readonly audioUrl = signal('');
   readonly playingId = signal<string | null>(null);
   readonly deletingId = signal<string | null>(null);
+  readonly loadingAudioId = signal<string | null>(null);
+  readonly playError = signal('');
+  readonly playingTitle = signal('');
   readonly title = new FormControl('', { nonNullable: true });
 
   readonly uploadStatus = signal<UploadStatus>('idle');
@@ -94,7 +97,7 @@ export class TracksPageComponent implements OnDestroy {
   upload(): void {
     if (!this.file || this.uploading()) return;
 
-    const title = this.title.value || this.file.name;
+    const title = this.title.value.trim() || this.file.name;
     this.uploadStatus.set('uploading');
     this.uploadProgress.set(0);
     this.uploadError.set('');
@@ -131,15 +134,34 @@ export class TracksPageComponent implements OnDestroy {
   }
 
   play(track: Track): void {
+    if (this.loadingAudioId()) return;
+    this.playError.set('');
+    this.loadingAudioId.set(track.id);
     this.service.audio(track.id).subscribe({
       next: (blob) => {
+        this.loadingAudioId.set(null);
         const previousUrl = this.audioUrl();
         if (previousUrl) URL.revokeObjectURL(previousUrl);
         this.audioUrl.set(URL.createObjectURL(blob));
         this.playingId.set(track.id);
+        this.playingTitle.set(track.title);
       },
-      error: (error) => console.error('[TracksPage] Lecture impossible', error),
+      error: (err: HttpErrorResponse) => {
+        this.loadingAudioId.set(null);
+        if (err.status === 401) return; // géré par l'intercepteur
+        this.playError.set(
+          err.status === 404
+            ? `« ${track.title} » est introuvable : la piste a peut-être été supprimée.`
+            : `Impossible de charger « ${track.title} ». Réessayez.`,
+        );
+      },
     });
+  }
+
+  /** Appelé par l'élément <audio> quand le navigateur ne peut pas décoder le fichier. */
+  onAudioError(): void {
+    this.playError.set(`Le navigateur ne peut pas lire « ${this.playingTitle()} » (format non pris en charge ou fichier corrompu).`);
+    this.playingId.set(null);
   }
 
   remove(track: Track): void {
@@ -172,6 +194,7 @@ export class TracksPageComponent implements OnDestroy {
     if (url) URL.revokeObjectURL(url);
     this.audioUrl.set('');
     this.playingId.set(null);
+    this.playingTitle.set('');
   }
 
   private reloadAfterDelete(): void {

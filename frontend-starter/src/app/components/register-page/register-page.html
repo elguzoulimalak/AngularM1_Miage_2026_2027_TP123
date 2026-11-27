@@ -1,13 +1,32 @@
 <section class="card">
   <h1>Créer un compte</h1>
-  <form [formGroup]="form" (ngSubmit)="submit()">
-    <label>Nom<input formControlName="name" /></label>
-    <label>Email<input type="email" formControlName="email" /></label>
-    <label>Mot de passe<input type="password" formControlName="password" /></label>
-    <button type="submit">Créer mon compte</button>
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <label>Nom
+      <input formControlName="name" autocomplete="name" [attr.aria-invalid]="showError('name')" />
+    </label>
+    @if (showError('name')) {
+      <small class="error">Le nom est obligatoire.</small>
+    }
+    <label>Email
+      <input type="email" formControlName="email" autocomplete="email" [attr.aria-invalid]="showError('email')" />
+    </label>
+    @if (showError('email')) {
+      <small class="error">
+        {{ form.controls.email.hasError('required') ? 'L’email est obligatoire.' : 'Format d’email invalide.' }}
+      </small>
+    }
+    <label>Mot de passe
+      <input type="password" formControlName="password" autocomplete="new-password" [attr.aria-invalid]="showError('password')" />
+    </label>
+    @if (showError('password')) {
+      <small class="error">Le mot de passe doit contenir au moins {{ minLength }} caractères.</small>
+    }
+    <button type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Création…' : 'Créer mon compte' }}
+    </button>
   </form>
   @if (error()) {
-    <p class="error">{{ error() }}</p>
+    <p class="error" role="alert">{{ error() }}</p>
   }
   <p><a routerLink="/login">Déjà inscrit ?</a></p>
 </section>

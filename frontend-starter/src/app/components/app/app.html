@@ -4,7 +4,7 @@
     <small>Le cloud qui manque à votre ampli</small>
   </div>
   <nav aria-label="Navigation principale">
-    @if (auth.currentUser()) {
+    @if (auth.isAuthenticated()) {
       <a routerLink="/tracks">Backing tracks</a>
       <a routerLink="/profile">Profil</a>
       <button type="button" (click)="logout()">Déconnexion</button>

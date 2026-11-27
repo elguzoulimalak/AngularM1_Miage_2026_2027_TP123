@@ -127,13 +127,34 @@ car les tests frontend ciblés couvrent les missions obligatoires.
 
 **Preuve de fonctionnement** : les suites contiennent des tests ciblés pour la
 pagination, l’upload multipart, la suppression, la confirmation, l’erreur
-HTTP, l’ajout du JWT et la gestion du 401. La commande prévue est :
-`npm test -- --run`.
+HTTP, l’ajout du JWT et la gestion du 401. La commande est `npm test`
+(le script lance déjà `ng test --watch=false`).
 
-**Résultats d’exécution** : la commande n’a pas pu être exécutée dans
-l’environnement utilisé pour la rédaction, car `npm` n’était pas disponible
-dans le PATH Windows. Ce point doit être relancé dans le terminal Node.js du
-binôme avant la remise, avec `npm test -- --run` puis `npm run build`.
+**Résultats d’exécution** (27/11/2026, Node.js 22, depuis `frontend-starter/`) :
+
+- `npm test` : 5 fichiers de tests, **13 tests réussis sur 13** pour les tests du TP3 ;
+- `npm run build` : réussi, bundle initial d’environ 433 Ko (106 Ko compressé).
+
+Les deux commandes sont à relancer sur le poste du binôme avant la remise
+pour confirmer le résultat dans son propre environnement.
+
+**Rapport des tests (attendu / observé)** :
+
+| Test | Résultat attendu | Résultat observé |
+|---|---|---|
+| `AuthService.login()` | `POST /api/auth/login` avec `{ email, password }`, token et utilisateur mémorisés | Réussi |
+| `AuthService.logout()` | token, utilisateur et `localStorage` vidés | Réussi |
+| `TrackService.list(3, 10)` | `GET /api/tracks` avec `page=3` et `limit=10` | Réussi |
+| `TrackService.delete()` | `DELETE /api/tracks/abc123` | Réussi |
+| `TrackService.upload()` | `POST` multipart avec `audio` et `title`, `reportProgress` activé | Réussi |
+| Intercepteur avec token | header `Authorization: Bearer <token>` ajouté | Réussi |
+| Intercepteur sans token | aucun header `Authorization` | Réussi |
+| Intercepteur sur `401` | déconnexion et navigation vers `/login` | Réussi |
+| Guard sans token | redirection vers `/login` (`UrlTree`) | Réussi |
+| Guard avec token | accès autorisé | Réussi |
+| Page pistes, erreur de chargement | message du serveur affiché dans un `role="alert"` | Réussi |
+| Page pistes, suppression confirmée | `DELETE`, rechargement de la liste, SnackBar de succès | Réussi |
+| Page pistes, suppression annulée | aucune requête `DELETE` | Réussi |
 
 **Ce que chaque membre sait maintenant expliquer sans l’agent** :
 

@@ -78,3 +78,32 @@ describe('TracksPageComponent', () => {
     http.expectNone('/api/tracks/t1');
   });
 });
+describe('TracksPageComponent — lecture', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('affiche une erreur compréhensible si la piste n’existe plus', () => {
+    const fixture = TestBed.createComponent(TracksPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isListRequest).flush(pageOf([track]));
+
+    component.play(track);
+    http.expectOne('/api/tracks/t1/audio').flush(new Blob(), { status: 404, statusText: 'Not Found' });
+    fixture.detectChanges();
+
+    expect(component.playError()).toContain('introuvable');
+    expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('Ma piste');
+  });
+});
