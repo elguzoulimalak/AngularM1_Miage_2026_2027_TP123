@@ -136,4 +136,4 @@ audio { width: 100%; margin-top: 0.5rem; }
   font-size: 0.85rem;
   color: #61756f;
   text-align: right;
-}
+}.now-playing { margin: 1rem 0 0.4rem; }

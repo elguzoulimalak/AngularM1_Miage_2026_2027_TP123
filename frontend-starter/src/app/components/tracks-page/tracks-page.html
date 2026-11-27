@@ -6,7 +6,7 @@
   </div>
 
   <div class="grid">
-        <article class="card">
+    <article class="card">
       <h2>Importer</h2>
       <label>Titre<input [formControl]="title" /></label>
       <label>Fichier audio
@@ -53,6 +53,7 @@
                 type="button"
                 class="play-btn"
                 (click)="play(track)"
+                [disabled]="loadingAudioId() !== null"
                 [attr.aria-label]="'Lire ' + track.title"
               >
                 <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -61,7 +62,7 @@
             <b class="track-card__title">{{ track.title }}</b>
             <small class="track-card__file">{{ track.originalName }}</small>
             <small class="track-card__meta">{{ formatSize(track.size) }} · {{ formatDate(track.createdAt) }}</small>
-                        <div class="track-card__actions">
+            <div class="track-card__actions">
               <button
                 type="button"
                 class="delete-btn"
@@ -86,8 +87,15 @@
         <button type="button" (click)="go(page() + 1)" [disabled]="page() === pages()">Suiv.</button>
       </div>
 
+      @if (loadingAudioId()) {
+        <p class="status" role="status">Chargement du morceau…</p>
+      }
+      @if (playError()) {
+        <p class="error" role="alert">{{ playError() }}</p>
+      }
       @if (audioUrl()) {
-        <audio [src]="audioUrl()" controls autoplay (ended)="playingId.set(null)"></audio>
+        <p class="now-playing" aria-live="polite">En cours : <b>{{ playingTitle() }}</b></p>
+        <audio [src]="audioUrl()" controls autoplay (ended)="playingId.set(null)" (error)="onAudioError()"></audio>
       }
     </article>
   </div>
