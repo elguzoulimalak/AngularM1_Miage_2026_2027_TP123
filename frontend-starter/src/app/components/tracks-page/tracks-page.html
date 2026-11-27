@@ -9,6 +9,12 @@
     <article class="card">
       <h2>Importer</h2>
       <label>Titre<input [formControl]="title" /></label>
+      <label>Visibilité
+        <select [formControl]="visibility">
+          <option value="private">Privée (moi seulement)</option>
+          <option value="public">Publique (visible dans Découvrir)</option>
+        </select>
+      </label>
       <label>Fichier audio
         <input #fileInput type="file" accept="audio/*" (change)="choose($event)" [disabled]="uploading()" />
       </label>
@@ -37,6 +43,14 @@
         <button type="button" (click)="load()">Actualiser</button>
       </div>
 
+      <form class="search" role="search" (submit)="$event.preventDefault(); applySearch()">
+        <input type="search" [formControl]="search" placeholder="Rechercher un titre…" aria-label="Rechercher dans mes pistes" maxlength="100" />
+        <button type="submit">Rechercher</button>
+        @if (activeSearch()) {
+          <button type="button" class="link-btn" (click)="clearSearch()">Effacer</button>
+        }
+      </form>
+
       @if (loading()) {
         <p class="status">Chargement…</p>
       }
@@ -48,7 +62,12 @@
         @for (track of tracks(); track track.id) {
           <article class="track-card" [class.playing]="playingId() === track.id">
             <div class="track-card__top">
-              <span class="format-badge">{{ formatExt(track.originalName) }}</span>
+              <span class="badges">
+                <span class="format-badge">{{ formatExt(track.originalName) }}</span>
+                <span class="visibility-badge" [class.public]="track.visibility === 'public'">
+                  {{ track.visibility === 'public' ? 'Publique' : 'Privée' }}
+                </span>
+              </span>
               <button
                 type="button"
                 class="play-btn"
@@ -65,6 +84,15 @@
             <div class="track-card__actions">
               <button
                 type="button"
+                class="visibility-btn"
+                (click)="toggleVisibility(track)"
+                [disabled]="togglingId() !== null"
+                [attr.aria-label]="(track.visibility === 'public' ? 'Rendre privée ' : 'Rendre publique ') + track.title"
+              >
+                {{ togglingId() === track.id ? '…' : track.visibility === 'public' ? 'Rendre privée' : 'Rendre publique' }}
+              </button>
+              <button
+                type="button"
                 class="delete-btn"
                 (click)="remove(track)"
                 [disabled]="deletingId() !== null"
@@ -76,7 +104,11 @@
           </article>
         } @empty {
           @if (!loading()) {
-            <p class="empty-state">Aucune piste pour l'instant — importe ton premier fichier audio ci-dessus.</p>
+            @if (activeSearch()) {
+              <p class="empty-state">Aucune piste ne correspond à « {{ activeSearch() }} ».</p>
+            } @else {
+              <p class="empty-state">Aucune piste pour l'instant — importe ton premier fichier audio ci-dessus.</p>
+            }
           }
         }
       </div>

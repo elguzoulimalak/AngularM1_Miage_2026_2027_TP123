@@ -12,6 +12,7 @@ const track: Track = {
   originalName: 'song.mp3',
   mimeType: 'audio/mpeg',
   size: 1024,
+  visibility: 'private',
   createdAt: '2026-01-01T00:00:00.000Z',
 };
 
@@ -78,6 +79,73 @@ describe('TracksPageComponent', () => {
     http.expectNone('/api/tracks/t1');
   });
 });
+describe('TracksPageComponent — visibilité et recherche (TP4)', () => {
+  let http: HttpTestingController;
+  const snackBar = { open: vi.fn() };
+
+  beforeEach(() => {
+    snackBar.open.mockClear();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: MatSnackBar, useValue: snackBar },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('rend une piste privée publique via PATCH et met à jour la carte', () => {
+    const fixture = TestBed.createComponent(TracksPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isListRequest).flush(pageOf([track]));
+
+    component.toggleVisibility(track);
+    const req = http.expectOne('/api/tracks/t1');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ visibility: 'public' });
+    req.flush({ ...track, visibility: 'public' });
+    fixture.detectChanges();
+
+    expect(component.tracks()[0].visibility).toBe('public');
+    expect(fixture.nativeElement.querySelector('.visibility-badge')?.textContent).toContain('Publique');
+    expect(snackBar.open).toHaveBeenCalledWith('« Ma piste » est maintenant publique.', 'Fermer', { duration: 4000 });
+  });
+
+  it('affiche un message si le changement de visibilité échoue', () => {
+    const fixture = TestBed.createComponent(TracksPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isListRequest).flush(pageOf([track]));
+
+    component.toggleVisibility(track);
+    http.expectOne('/api/tracks/t1').flush({ message: 'Piste inconnue' }, { status: 404, statusText: 'Not Found' });
+
+    expect(component.tracks()[0].visibility).toBe('private');
+    expect(component.togglingId()).toBeNull();
+    expect(snackBar.open).toHaveBeenCalledWith('Piste inconnue', 'Fermer', { duration: 4000 });
+  });
+
+  it('recherche dans mes pistes en repartant de la page 1', () => {
+    const fixture = TestBed.createComponent(TracksPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isListRequest).flush({ ...pageOf([track]), pages: 3 });
+    component.page.set(2);
+
+    component.search.setValue('  blues ');
+    component.applySearch();
+
+    const req = http.expectOne(isListRequest);
+    expect(req.request.params.get('q')).toBe('blues');
+    expect(req.request.params.get('page')).toBe('1');
+    req.flush(pageOf([]));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.empty-state')?.textContent).toContain('blues');
+  });
+});
+
 describe('TracksPageComponent — lecture', () => {
   let http: HttpTestingController;
 

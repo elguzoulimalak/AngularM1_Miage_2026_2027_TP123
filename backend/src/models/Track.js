@@ -18,12 +18,22 @@ const schema = new mongoose.Schema(
     storedName: { type: String, required: true, select: false },
     mimeType: { type: String, required: true },
     size: { type: Number, required: true, min: 0 },
+    // TP4 : une piste est privée par défaut. Une piste publique peut être
+    // recherchée, listée et écoutée par tous les utilisateurs connectés.
+    visibility: {
+      type: String,
+      enum: ["private", "public"],
+      default: "private",
+      index: true,
+    },
   },
   { timestamps: true },
 );
 
 // Cet index accélère la liste des pistes d'un utilisateur triées par date.
 schema.index({ ownerId: 1, createdAt: -1 });
+// Cet index sert la liste des pistes publiques triées des plus récentes aux plus anciennes.
+schema.index({ visibility: 1, createdAt: -1 });
 
 /**
  * Convertit un document Mongoose en objet sûr pour le frontend.
@@ -38,6 +48,7 @@ schema.methods.toPublic = function () {
     originalName: this.originalName,
     mimeType: this.mimeType,
     size: this.size,
+    visibility: this.visibility ?? "private",
     createdAt: this.createdAt,
   };
 };

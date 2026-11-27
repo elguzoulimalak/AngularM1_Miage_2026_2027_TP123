@@ -6,8 +6,17 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import mongoose from "mongoose";
 import { User } from "./models/User.js";
 import { Track } from "./models/Track.js";
+import {
+  myTracksFilter,
+  parsePagination,
+  parseSearch,
+  parseVisibility,
+  publicTracksFilter,
+  readableTrackFilter,
+} from "./tracks/query.js";
 
 // Les fichiers audio restent sur le disque du serveur dans ce TP.
 // MongoDB ne conserve que leurs métadonnées : titre, nom, taille, etc.
@@ -118,6 +127,20 @@ const upload = multer({
     return callback(error);
   },
 });
+
+/** Supprime un fichier reçu par Multer quand l'upload est finalement refusé. */
+async function removeUploadedFile(file) {
+  const uploadedPath = path.join(UPLOADS, file.filename);
+  try {
+    await fsPromises.unlink(uploadedPath);
+    console.log(`[tracks] Fichier temporaire supprimé : ${uploadedPath}`);
+  } catch (cleanupError) {
+    console.error(
+      `[tracks] Impossible de supprimer le fichier temporaire ${uploadedPath}`,
+      cleanupError,
+    );
+  }
+}
 
 /**
  * Construit l'application Express sans ouvrir de port.
@@ -267,21 +290,23 @@ export function createApp() {
     }
   });
 
-  /** Retourne une page des pistes appartenant exclusivement à l'utilisateur. */
+  /**
+   * Retourne une page des pistes appartenant exclusivement à l'utilisateur.
+   * TP4 : le paramètre optionnel `q` filtre les pistes par titre.
+   */
   app.get("/api/tracks", auth, async (req, res, next) => {
     try {
-      const page = Math.max(1, Number(req.query.page) || 1);
-      const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 5));
-      const filter = { ownerId: req.auth.sub };
+      const { page, limit } = parsePagination(req.query);
+      const search = parseSearch(req.query.q);
+      if (search === null) {
+        console.warn("[tracks] Recherche refusée : paramètre q invalide");
+        return res.status(400).json({ message: "Recherche invalide (100 caractères maximum)" });
+      }
 
-      console.log(`[tracks] Lecture page=${page}, limit=${limit}, user=${req.auth.sub}`);
+      const filter = myTracksFilter(req.auth.sub, search);
+      console.log(`[tracks] Lecture page=${page}, limit=${limit}, q="${search}", user=${req.auth.sub}`);
 
       // La lecture des pistes et le comptage total sont parallélisés pour réduire la latence.
-      // on utilise Promise.all pour exécuter les deux opérations en parallèle. 
-      // Track.find() récupère les pistes de l'utilisateur avec pagination, 
-      // tandis que Track.countDocuments() compte le nombre total de pistes pour cet utilisateur.
-      // Promise.all attend que les deux opérations soient terminées avant de continuer et les résultats
-        // sont stockés dans les variables items et total.
       const [items, total] = await Promise.all([
         Track.find(filter)
           .sort({ createdAt: -1 })
@@ -292,21 +317,18 @@ export function createApp() {
         Track.countDocuments(filter),
       ]);
 
-      // items.map(track) crée un nouveau tableau publicItems en transformant chaque piste pour inclure 
-      // uniquement les champs nécessaires à l'API.
-      // L'identifiant MongoDB (_id) est converti en chaîne de caractères (id) pour être plus lisible 
-      // côté frontend.
-      // Le champ _id (généré par MongoDB) est supprimé pour éviter de l'exposer dans la réponse JSON.
+      // _id devient id ; les pistes créées avant le TP4 n'ont pas de champ
+      // visibility et sont donc considérées comme privées.
       const publicItems = items.map((track) => ({
         ...track,
         id: String(track._id),
         _id: undefined,
+        __v: undefined,
+        ownerId: String(track.ownerId),
+        visibility: track.visibility ?? "private",
       }));
 
       console.log(`[tracks] ${publicItems.length} piste(s) envoyée(s) sur ${total}`);
-
-      // envoi de la réponse JSON avec les pistes publiques, la page actuelle, la limite par page, 
-      // le nombre total de pistes et le nombre total de pages.
       res.json({
         items: publicItems,
         page,
@@ -316,6 +338,96 @@ export function createApp() {
       });
     } catch (error) {
       console.error("[tracks] Erreur de pagination", error);
+      next(error);
+    }
+  });
+
+  /**
+   * TP4 : retourne une page des pistes publiques de tous les utilisateurs,
+   * des plus récentes aux plus anciennes, avec le nom de leur propriétaire.
+   * Le paramètre optionnel `q` filtre par titre.
+   */
+  app.get("/api/tracks/public", auth, async (req, res, next) => {
+    try {
+      const { page, limit } = parsePagination(req.query);
+      const search = parseSearch(req.query.q);
+      if (search === null) {
+        console.warn("[tracks] Recherche publique refusée : paramètre q invalide");
+        return res.status(400).json({ message: "Recherche invalide (100 caractères maximum)" });
+      }
+
+      const filter = publicTracksFilter(search);
+      console.log(`[tracks] Lecture publique page=${page}, limit=${limit}, q="${search}"`);
+
+      const [items, total] = await Promise.all([
+        Track.find(filter)
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .select("-storedName")
+          // populate remplace ownerId par le document User, limité à son nom.
+          .populate("ownerId", "name")
+          .lean(),
+        Track.countDocuments(filter),
+      ]);
+
+      const publicItems = items.map((track) => ({
+        id: String(track._id),
+        ownerId: String(track.ownerId?._id ?? track.ownerId),
+        ownerName: track.ownerId?.name ?? "Utilisateur inconnu",
+        title: track.title,
+        originalName: track.originalName,
+        mimeType: track.mimeType,
+        size: track.size,
+        visibility: "public",
+        createdAt: track.createdAt,
+      }));
+
+      console.log(`[tracks] ${publicItems.length} piste(s) publique(s) envoyée(s) sur ${total}`);
+      res.json({
+        items: publicItems,
+        page,
+        limit,
+        total,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      });
+    } catch (error) {
+      console.error("[tracks] Erreur de lecture des pistes publiques", error);
+      next(error);
+    }
+  });
+
+  /**
+   * TP4 : change la visibilité d'une piste. Seul son propriétaire peut le faire.
+   * Corps attendu : { "visibility": "public" | "private" }.
+   */
+  app.patch("/api/tracks/:id", auth, async (req, res, next) => {
+    try {
+      const visibility = parseVisibility(req.body?.visibility);
+      if (!visibility) {
+        console.warn(`[tracks] Visibilité invalide pour ${req.params.id}`);
+        return res.status(400).json({ message: 'Visibilité attendue : "public" ou "private"' });
+      }
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        console.warn(`[tracks] Identifiant invalide : ${req.params.id}`);
+        return res.status(404).json({ message: "Piste inconnue" });
+      }
+
+      const track = await Track.findOneAndUpdate(
+        { _id: req.params.id, ownerId: req.auth.sub },
+        { $set: { visibility } },
+        { new: true, runValidators: true },
+      );
+
+      if (!track) {
+        console.warn(`[tracks] Visibilité non modifiée (inconnue ou interdite) : ${req.params.id}`);
+        return res.status(404).json({ message: "Piste inconnue" });
+      }
+
+      console.log(`[tracks] Visibilité de ${track.id} : ${visibility}`);
+      res.json(track.toPublic());
+    } catch (error) {
+      console.error("[tracks] Erreur de changement de visibilité", error);
       next(error);
     }
   });
@@ -342,6 +454,14 @@ export function createApp() {
           return res.status(400).json({ message: "Fichier audio requis" });
         }
 
+        // TP4 : champ texte optionnel `visibility`, privé par défaut.
+        const visibility = parseVisibility(req.body.visibility, "private");
+        if (!visibility) {
+          console.warn(`[tracks] Upload refusé : visibilité invalide par ${req.auth.sub}`);
+          await removeUploadedFile(req.file);
+          return res.status(400).json({ message: 'Visibilité attendue : "public" ou "private"' });
+        }
+
         const track = await Track.create({
           ownerId: req.auth.sub,
           title: req.body.title || req.file.originalname,
@@ -349,6 +469,7 @@ export function createApp() {
           storedName: req.file.filename,
           mimeType: req.file.mimetype,
           size: req.file.size,
+          visibility,
         });
 
         console.log(`[tracks] Upload enregistré : ${track.id}`);
@@ -358,30 +479,22 @@ export function createApp() {
 
         // Si MongoDB échoue après l'écriture sur disque, on tente de nettoyer
         // le fichier orphelin. L'erreur de nettoyage est elle aussi loguée.
-        if (req.file) {
-          const uploadedPath = path.join(UPLOADS, req.file.filename);
-          try {
-            await fsPromises.unlink(uploadedPath);
-            console.log(`[tracks] Fichier temporaire supprimé : ${uploadedPath}`);
-          } catch (cleanupError) {
-            console.error(
-              `[tracks] Impossible de supprimer le fichier temporaire ${uploadedPath}`,
-              cleanupError,
-            );
-          }
-        }
+        if (req.file) await removeUploadedFile(req.file);
         next(error);
       }
     },
   );
 
-  /** Envoie le contenu binaire d'une piste après vérification de sa propriété. */
+  /**
+   * Envoie le contenu binaire d'une piste.
+   * TP4 : autorisé pour son propriétaire, ou pour tout utilisateur connecté
+   * si la piste est publique.
+   */
   app.get("/api/tracks/:id/audio", auth, async (req, res, next) => {
     try {
-      const track = await Track.findOne({
-        _id: req.params.id,
-        ownerId: req.auth.sub,
-      }).select("+storedName");
+      const track = await Track.findOne(
+        readableTrackFilter(req.params.id, req.auth.sub),
+      ).select("+storedName");
 
       if (!track) {
         console.warn(`[tracks] Audio introuvable ou interdit : ${req.params.id}`);

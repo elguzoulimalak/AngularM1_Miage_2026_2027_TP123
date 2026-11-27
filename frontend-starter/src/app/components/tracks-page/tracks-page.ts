@@ -2,7 +2,7 @@ import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild }
 import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Track } from '../../shared/models/track.model';
+import { Track, TrackVisibility } from '../../shared/models/track.model';
 import { TrackService } from '../../shared/services/track.service';
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024;
@@ -32,6 +32,13 @@ export class TracksPageComponent implements OnDestroy {
   readonly playError = signal('');
   readonly playingTitle = signal('');
   readonly title = new FormControl('', { nonNullable: true });
+  /** Visibility chosen in the upload form (private by default). */
+  readonly visibility = new FormControl<TrackVisibility>('private', { nonNullable: true });
+  /** Search box above "Mes pistes". */
+  readonly search = new FormControl('', { nonNullable: true });
+  /** Search actually applied to the list (set when the user submits). */
+  readonly activeSearch = signal('');
+  readonly togglingId = signal<string | null>(null);
 
   readonly uploadStatus = signal<UploadStatus>('idle');
   readonly uploadProgress = signal(0);
@@ -76,7 +83,7 @@ export class TracksPageComponent implements OnDestroy {
   load(): void {
     this.loading.set(true);
     this.error.set('');
-    this.service.list(this.page()).subscribe({
+    this.service.list(this.page(), 5, this.activeSearch()).subscribe({
       next: (response) => {
         this.tracks.set(response.items);
         this.pages.set(response.pages);
@@ -85,6 +92,41 @@ export class TracksPageComponent implements OnDestroy {
       error: (err: { error?: { message?: string } }) => {
         this.error.set(err.error?.message ?? 'Impossible de charger les pistes.');
         this.loading.set(false);
+      },
+    });
+  }
+
+  /** Applies the search box and goes back to page 1. */
+  applySearch(): void {
+    this.activeSearch.set(this.search.value.trim());
+    this.page.set(1);
+    this.load();
+  }
+
+  clearSearch(): void {
+    this.search.setValue('');
+    this.applySearch();
+  }
+
+  /** Switches a track between private and public. */
+  toggleVisibility(track: Track): void {
+    if (this.togglingId()) return;
+    const next: TrackVisibility = track.visibility === 'public' ? 'private' : 'public';
+    this.togglingId.set(track.id);
+    this.service.setVisibility(track.id, next).subscribe({
+      next: (updated) => {
+        this.togglingId.set(null);
+        this.tracks.update((list) => list.map((t) => (t.id === updated.id ? { ...t, visibility: updated.visibility } : t)));
+        this.notify(
+          updated.visibility === 'public'
+            ? `« ${track.title} » est maintenant publique.`
+            : `« ${track.title} » est maintenant privée.`,
+        );
+      },
+      error: (err: HttpErrorResponse) => {
+        this.togglingId.set(null);
+        if (err.status === 401) return; // géré par l'intercepteur
+        this.notify(err.error?.message ?? 'Impossible de changer la visibilité. Réessayez.');
       },
     });
   }
@@ -104,7 +146,7 @@ export class TracksPageComponent implements OnDestroy {
     this.uploadSuccess.set('');
     this.title.disable();
 
-    this.service.upload(this.file, title).subscribe({
+    this.service.upload(this.file, title, this.visibility.value).subscribe({
       next: (event) => {
         if (event.type === HttpEventType.UploadProgress && event.total) {
           this.uploadProgress.set(Math.round((100 * event.loaded) / event.total));
@@ -126,6 +168,7 @@ export class TracksPageComponent implements OnDestroy {
     this.uploadSuccess.set(`« ${title} » envoyée avec succès.`);
     this.title.enable();
     this.title.setValue('');
+    this.visibility.setValue('private');
     this.file = undefined;
     const input = this.fileInput();
     if (input) input.nativeElement.value = '';

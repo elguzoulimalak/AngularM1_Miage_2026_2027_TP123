@@ -1,0 +1,79 @@
+<section>
+  <div class="hero">
+    <p class="eyebrow">DÉCOUVRIR</p>
+    <h1>Pistes publiques</h1>
+    <p>Écoutez les backing tracks partagées par toute la communauté.</p>
+  </div>
+
+  <article class="card">
+    <form class="search" role="search" (submit)="$event.preventDefault(); applySearch()">
+      <input type="search" [formControl]="search" placeholder="Rechercher un titre…" aria-label="Rechercher dans les pistes publiques" maxlength="100" />
+      <button type="submit">Rechercher</button>
+      @if (activeSearch()) {
+        <button type="button" class="link-btn" (click)="clearSearch()">Effacer</button>
+      }
+    </form>
+
+    <h2>
+      @if (activeSearch()) {
+        Résultats pour « {{ activeSearch() }} » ({{ total() }})
+      } @else {
+        Récemment ajoutées
+      }
+    </h2>
+
+    @if (loading()) {
+      <p class="status">Chargement…</p>
+    }
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+
+    <ul class="list">
+      @for (track of tracks(); track track.id) {
+        <li class="item" [class.playing]="playingId() === track.id">
+          <button
+            type="button"
+            class="play-btn"
+            (click)="play(track)"
+            [disabled]="loadingAudioId() !== null"
+            [attr.aria-label]="'Lire ' + track.title"
+          >▶</button>
+          <div class="info">
+            <b>{{ track.title }}</b>
+            <small>
+              par {{ track.ownerName }}@if (isMine(track)) { <span class="mine">(vous)</span> } · {{ formatDate(track.createdAt) }}
+            </small>
+          </div>
+        </li>
+      } @empty {
+        @if (!loading()) {
+          <li class="empty-state">
+            @if (activeSearch()) {
+              Aucune piste publique ne correspond à « {{ activeSearch() }} ».
+            } @else {
+              Aucune piste publique pour l'instant. Rendez une de vos pistes publique depuis « Backing tracks ».
+            }
+          </li>
+        }
+      }
+    </ul>
+
+    <div class="pager">
+      <button type="button" (click)="go(page() - 1)" [disabled]="page() === 1">Préc.</button>
+      <span>Page {{ page() }} / {{ pages() }}</span>
+      <button type="button" (click)="go(page() + 1)" [disabled]="page() === pages()">Suiv.</button>
+    </div>
+
+    @if (loadingAudioId()) {
+      <p class="status" role="status">Chargement du morceau…</p>
+    }
+    @if (playError()) {
+      <p class="error" role="alert">{{ playError() }}</p>
+    }
+    @if (audioUrl()) {
+      <p aria-live="polite">En cours : <b>{{ playingTitle() }}</b></p>
+      <audio [src]="audioUrl()" controls autoplay (ended)="playingId.set(null)"></audio>
+    }
+  </article>
+</section>
