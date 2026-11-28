@@ -137,3 +137,40 @@ audio { width: 100%; margin-top: 0.5rem; }
   color: #61756f;
   text-align: right;
 }.now-playing { margin: 1rem 0 0.4rem; }
+
+/* TP4 : recherche et visibilité */
+.search {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+.search input { flex: 1; min-width: 0; }
+.link-btn {
+  background: none;
+  color: #1d755e;
+  text-decoration: underline;
+}
+.badges { display: flex; gap: 0.35rem; }
+.visibility-badge {
+  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #61756f;
+  background: #eef1f0;
+  border-radius: 999px;
+}
+.visibility-badge.public {
+  color: #8a5a14;
+  background: #f7ead6;
+}
+.track-card__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+select { padding: 0.75rem; border: 1px solid #b8cbc5; border-radius: 8px; background: white; }
+.visibility-btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  color: #1d755e;
+  background: transparent;
+  border: 1px solid #b8cbc5;
+}
+.visibility-btn:hover:not(:disabled) { background: #e4efe9; }

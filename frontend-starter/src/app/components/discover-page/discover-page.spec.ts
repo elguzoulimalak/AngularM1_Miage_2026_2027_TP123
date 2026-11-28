@@ -1,0 +1,92 @@
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Track } from '../../shared/models/track.model';
+import { AuthService } from '../../shared/services/auth.service';
+import { DiscoverPageComponent } from './discover-page';
+
+const publicTrack: Track = {
+  id: 'p1',
+  ownerId: 'u2',
+  ownerName: 'Alice',
+  title: 'Blues en A',
+  originalName: 'blues.mp3',
+  mimeType: 'audio/mpeg',
+  size: 2048,
+  visibility: 'public',
+  createdAt: '2026-11-27T00:00:00.000Z',
+};
+
+const pageOf = (items: Track[]) => ({ items, page: 1, limit: 10, total: items.length, pages: 1 });
+const isPublicList = (r: { url: string }) => r.url === '/api/tracks/public';
+
+describe('DiscoverPageComponent', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('affiche les pistes publiques récentes avec le nom du propriétaire', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    const req = http.expectOne(isPublicList);
+    expect(req.request.params.has('q')).toBe(false);
+    req.flush(pageOf([publicTrack]));
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Récemment ajoutées');
+    expect(text).toContain('Blues en A');
+    expect(text).toContain('par Alice');
+  });
+
+  it('recherche par titre et affiche un message si rien ne correspond', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isPublicList).flush(pageOf([publicTrack]));
+
+    component.search.setValue('jazz');
+    component.applySearch();
+    const req = http.expectOne(isPublicList);
+    expect(req.request.params.get('q')).toBe('jazz');
+    expect(req.request.params.get('page')).toBe('1');
+    req.flush(pageOf([]));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.empty-state')?.textContent).toContain('jazz');
+  });
+
+  it('signale ses propres pistes avec « (vous) »', () => {
+    TestBed.inject(AuthService).currentUser.set({ id: 'u2', name: 'Alice', email: 'a@b.fr', createdAt: '' });
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    http.expectOne(isPublicList).flush(pageOf([publicTrack]));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.mine')?.textContent).toContain('(vous)');
+  });
+
+  it('explique qu’une piste rendue privée n’est plus disponible', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isPublicList).flush(pageOf([publicTrack]));
+
+    component.play(publicTrack);
+    http.expectOne('/api/tracks/p1/audio').flush(new Blob(), { status: 404, statusText: 'Not Found' });
+
+    expect(component.playError()).toContain('rendue privée');
+  });
+
+  it('affiche une erreur si le chargement échoue', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    http.expectOne(isPublicList).flush({ message: 'Serveur indisponible' }, { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('Serveur indisponible');
+  });
+});
