@@ -5,7 +5,7 @@ export function fakeQuery(result) {
     lean: () => Promise.resolve(result),
     then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
   };
-  for (const name of ["sort", "skip", "limit", "select", "populate"]) {
+  for (const name of ["sort", "skip", "limit", "select", "populate", "collation"]) {
     query[name] = (arg) => {
       query.calls[name] = [...(query.calls[name] ?? []), arg];
       return query;

@@ -1,0 +1,34 @@
+<div class="filters">
+  <button type="button" class="toggle" (click)="toggle()" [attr.aria-expanded]="open()" aria-controls="advanced-filters">
+    Filtres avancés
+    @if (activeCount()) {
+      <span class="count">{{ activeCount() }}</span>
+    }
+    <span aria-hidden="true">{{ open() ? '▴' : '▾' }}</span>
+  </button>
+
+  @if (open()) {
+    <form id="advanced-filters" class="panel" [formGroup]="form" (submit)="$event.preventDefault(); apply()">
+      <label>Format
+        <select formControlName="format" (change)="apply()">
+          @for (f of formats; track f.value) {
+            <option [value]="f.value">{{ f.label }}</option>
+          }
+        </select>
+      </label>
+      <label>Trier par
+        <select formControlName="sort" (change)="apply()">
+          @for (s of sorts; track s.value) {
+            <option [value]="s.value">{{ s.label }}</option>
+          }
+        </select>
+      </label>
+      @if (showOwner()) {
+        <label>Propriétaire
+          <input type="search" formControlName="owner" placeholder="Nom du musicien" maxlength="100" (change)="apply()" />
+        </label>
+      }
+      <button type="button" class="link-btn" (click)="reset()" [disabled]="!activeCount()">Réinitialiser</button>
+    </form>
+  }
+</div>

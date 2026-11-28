@@ -50,6 +50,20 @@ describe('TrackService', () => {
     req.flush({ items: [], page: 2, limit: 10, total: 0, pages: 1 });
   });
 
+  it('envoie les filtres avancés seulement quand ils sont utiles', () => {
+    service.listPublic(1, 10, '', { format: 'wav', sort: 'title', owner: ' Ali ' }).subscribe();
+    const req = http.expectOne((r) => r.url === '/api/tracks/public');
+    expect(req.request.params.get('format')).toBe('wav');
+    expect(req.request.params.get('sort')).toBe('title');
+    expect(req.request.params.get('owner')).toBe('Ali');
+    req.flush({ items: [], page: 1, limit: 10, total: 0, pages: 1 });
+
+    service.list(1, 5, '', { format: '', sort: 'recent', owner: '  ' }).subscribe();
+    const req2 = http.expectOne((r) => r.url === '/api/tracks');
+    expect(req2.request.params.keys().sort()).toEqual(['limit', 'page']);
+    req2.flush({ items: [], page: 1, limit: 5, total: 0, pages: 1 });
+  });
+
   it('setVisibility() envoie PATCH /api/tracks/:id avec la visibilité', () => {
     service.setVisibility('abc123', 'public').subscribe();
     const req = http.expectOne('/api/tracks/abc123');

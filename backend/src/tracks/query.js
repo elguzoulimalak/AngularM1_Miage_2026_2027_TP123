@@ -40,25 +40,91 @@ export function parseSearch(value) {
   return trimmed.length > MAX_QUERY_LENGTH ? null : trimmed;
 }
 
-/** Ajoute au filtre une recherche insensible à la casse sur le titre. */
-function withSearch(filter, search) {
-  if (!search) return filter;
-  return { ...filter, title: { $regex: escapeRegex(search), $options: "i" } };
+/*
+ * Recherche avancée (TP4 finition) : format, tri et propriétaire.
+ * Un format correspond à un ou plusieurs types MIME acceptés à l'upload.
+ */
+export const FORMATS = {
+  mp3: ["audio/mpeg"],
+  wav: ["audio/wav", "audio/x-wav"],
+  ogg: ["audio/ogg"],
+  m4a: ["audio/mp4", "audio/x-m4a"],
+};
+
+/** Tris disponibles. `title` utilise une collation française (voir sortOptions). */
+export const SORTS = {
+  recent: { createdAt: -1 },
+  oldest: { createdAt: 1 },
+  title: { title: 1, createdAt: -1 },
+  size: { size: -1, createdAt: -1 },
+};
+
+/** Format demandé : "" (tous), une clé de FORMATS, ou null si invalide. */
+export function parseFormat(value) {
+  if (value === undefined || value === null || value === "") return "";
+  return typeof value === "string" && Object.hasOwn(FORMATS, value) ? value : null;
 }
 
-/** Filtre « mes pistes », avec recherche optionnelle sur le titre. */
-export function myTracksFilter(userId, search = "") {
-  return withSearch({ ownerId: userId }, search);
+/** Tri demandé : une clé de SORTS ("recent" par défaut), ou null si invalide. */
+export function parseSort(value) {
+  if (value === undefined || value === null || value === "") return "recent";
+  return typeof value === "string" && Object.hasOwn(SORTS, value) ? value : null;
+}
+
+/**
+ * Valide tous les paramètres de recherche d'une liste de pistes.
+ * Retourne { search, format, sort, owner } ou { error } avec un message clair.
+ */
+export function parseTrackQuery(query = {}) {
+  const search = parseSearch(query.q);
+  if (search === null) return { error: "Recherche invalide (100 caractères maximum)" };
+  const format = parseFormat(query.format);
+  if (format === null) return { error: `Format inconnu (valeurs possibles : ${Object.keys(FORMATS).join(", ")})` };
+  const sort = parseSort(query.sort);
+  if (sort === null) return { error: `Tri inconnu (valeurs possibles : ${Object.keys(SORTS).join(", ")})` };
+  const owner = parseSearch(query.owner);
+  if (owner === null) return { error: "Propriétaire invalide (100 caractères maximum)" };
+  return { search, format, sort, owner };
+}
+
+/**
+ * Options Mongoose du tri. Le tri par titre utilise une collation française
+ * (strength 1) : « école », « Ecole » et « ecole » sont rangés ensemble.
+ * Les autres tris n'en ont pas besoin, ce qui laisse MongoDB utiliser les index.
+ */
+export function sortOptions(sort) {
+  return {
+    sort: SORTS[sort] ?? SORTS.recent,
+    collation: sort === "title" ? { locale: "fr", strength: 1 } : null,
+  };
+}
+
+/** Filtre des utilisateurs dont le nom contient le texte (recherche par propriétaire). */
+export function ownerNameFilter(owner) {
+  return { name: { $regex: escapeRegex(owner), $options: "i" } };
+}
+
+/** Ajoute au filtre la recherche sur le titre et le format. */
+function withSearch(filter, search, format = "") {
+  let result = filter;
+  if (search) result = { ...result, title: { $regex: escapeRegex(search), $options: "i" } };
+  if (format) result = { ...result, mimeType: { $in: FORMATS[format] } };
+  return result;
+}
+
+/** Filtre « mes pistes », avec recherche optionnelle sur le titre et le format. */
+export function myTracksFilter(userId, search = "", format = "") {
+  return withSearch({ ownerId: userId }, search, format);
 }
 
 /** Filtre des pistes publiques de tous les utilisateurs. */
-export function publicTracksFilter(search = "") {
-  return withSearch({ visibility: "public" }, search);
+export function publicTracksFilter(search = "", format = "") {
+  return withSearch({ visibility: "public" }, search, format);
 }
 
 /** Filtre des pistes qu'un ami a partagées avec moi (TP4 étape 2). */
-export function sharedWithMeFilter(userId, search = "") {
-  return withSearch({ sharedWith: userId }, search);
+export function sharedWithMeFilter(userId, search = "", format = "") {
+  return withSearch({ sharedWith: userId }, search, format);
 }
 
 /**

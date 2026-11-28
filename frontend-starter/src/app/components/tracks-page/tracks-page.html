@@ -50,6 +50,7 @@
           <button type="button" class="link-btn" (click)="clearSearch()">Effacer</button>
         }
       </form>
+      <app-track-filters [showOwner]="false" (filtersChange)="onFilters($event)" />
 
       @if (loading()) {
         <p class="status">Chargement…</p>
@@ -138,6 +139,8 @@
           @if (!loading()) {
             @if (activeSearch()) {
               <p class="empty-state">Aucune piste ne correspond à « {{ activeSearch() }} ».</p>
+            } @else if (hasCriteria()) {
+              <p class="empty-state">Aucune piste ne correspond à ces filtres.</p>
             } @else {
               <p class="empty-state">Aucune piste pour l'instant — importe ton premier fichier audio ci-dessus.</p>
             }

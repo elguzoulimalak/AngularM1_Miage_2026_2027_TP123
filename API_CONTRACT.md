@@ -11,7 +11,7 @@ Le contrat HTTP ne dépend pas du choix de persistance : le backend fourni utili
 | POST | `/auth/login` | `{email,password}` | `200 {token,user}` |
 | GET | `/users/me` | JWT | `200 User` |
 | PUT | `/users/me` | `{name}` + JWT | `200 User` |
-| GET | `/tracks?page=1&limit=5&q=blues` | JWT | `Page<Track>` (mes pistes) |
+| GET | `/tracks?page=1&limit=5&q=blues&format=mp3&sort=title` | JWT | `Page<Track>` (mes pistes) |
 | GET | `/tracks/public?page=1&limit=5&q=blues` | JWT | `Page<Track>` (pistes publiques, avec `ownerName`) |
 | POST | `/tracks` | multipart : `audio`, `title`, `visibility` | `201 Track` |
 | PATCH | `/tracks/:id` | `{visibility}` + JWT | `200 Track` |
@@ -65,3 +65,16 @@ Erreurs courantes : `400` validation, `401` authentification, `404` ressource, `
   - `type: "track_shared"` : l'ami a partagé une piste **avec moi** (`PUT /tracks/:id/shares/:userId`). Les partages avec d'autres personnes ne sont jamais montrés.
   - Un événement disparaît du fil dès que la piste est supprimée, redevient privée ou n'est plus partagée avec moi. Il disparaît aussi si l'auteur n'est plus mon ami. Pour une même piste et un même type, seul l'événement le plus récent est gardé.
   - Les événements sont enregistrés par `POST /tracks` (si `visibility = public`), `PATCH /tracks/:id` (passage en public) et `PUT /tracks/:id/shares/:userId`. Ces routes ne changent pas de contrat : si l'enregistrement de l'événement échoue, l'erreur est journalisée et la réponse reste un succès.
+
+
+## TP4 finition - recherche avancée
+
+Les trois listes `GET /tracks`, `GET /tracks/public` et `GET /tracks/shared` acceptent, en plus de `page`, `limit` et `q`, des paramètres optionnels qui se combinent entre eux :
+
+| Paramètre | Valeurs | Effet |
+|---|---|---|
+| `format` | `mp3`, `wav`, `ogg`, `m4a` | Ne garde que ce format (`wav` = `audio/wav` et `audio/x-wav`, `m4a` = `audio/mp4` et `audio/x-m4a`) |
+| `sort` | `recent` (défaut), `oldest`, `title`, `size` | Plus récentes, plus anciennes, titre de A à Z (collation française, sans tenir compte des majuscules ni des accents), ou taille décroissante |
+| `owner` | texte, 100 caractères maximum | `/tracks/public` et `/tracks/shared` seulement : partie du nom du propriétaire, sans tenir compte des majuscules. Ignoré par `/tracks` |
+
+Erreurs : `400` avec un message qui liste les valeurs possibles si `format` ou `sort` est inconnu, ou si `q` ou `owner` est trop long. Si aucun utilisateur ne correspond à `owner`, la réponse est une page vide (`200`, `total: 0`).

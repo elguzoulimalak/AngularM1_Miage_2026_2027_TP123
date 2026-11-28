@@ -166,4 +166,37 @@ describe('DiscoverPageComponent', () => {
     fixture.detectChanges();
     expect(component.activityError()).toBe('Erreur serveur');
   });
+
+  it('applique les filtres avancés (propriétaire, format, tri) en repartant de la page 1', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isPublicList).flush({ ...pageOf([publicTrack]), pages: 3 });
+    component.page.set(3);
+
+    component.onFilters({ format: 'mp3', sort: 'title', owner: 'Ali' });
+    const req = http.expectOne(isPublicList);
+    expect(req.request.params.get('page')).toBe('1');
+    expect(req.request.params.get('format')).toBe('mp3');
+    expect(req.request.params.get('sort')).toBe('title');
+    expect(req.request.params.get('owner')).toBe('Ali');
+    req.flush(pageOf([]));
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Résultats filtrés (0)');
+    expect(text).toContain('Aucune piste ne correspond à ces filtres.');
+  });
+
+  it('garde les filtres en changeant d’onglet', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isPublicList).flush(pageOf([]));
+    component.onFilters({ format: 'wav', sort: 'recent', owner: '' });
+    http.expectOne(isPublicList).flush(pageOf([]));
+
+    component.selectTab('shared');
+    const req = http.expectOne((r) => r.url === '/api/tracks/shared');
+    expect(req.request.params.get('format')).toBe('wav');
+    req.flush(pageOf([]));
+  });
 });

@@ -221,6 +221,48 @@ describe('TracksPageComponent — partage avec les amis (TP4 étape 2)', () => {
   });
 });
 
+describe('TracksPageComponent — recherche avancée', () => {
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('combine la recherche et les filtres, sans champ propriétaire', () => {
+    const fixture = TestBed.createComponent(TracksPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isListRequest).flush(pageOf([track]));
+    fixture.detectChanges();
+
+    component.search.setValue('blues');
+    component.applySearch();
+    http.expectOne(isListRequest).flush(pageOf([track]));
+
+    component.onFilters({ format: 'ogg', sort: 'size', owner: '' });
+    const req = http.expectOne(isListRequest);
+    expect(req.request.params.get('q')).toBe('blues');
+    expect(req.request.params.get('format')).toBe('ogg');
+    expect(req.request.params.get('sort')).toBe('size');
+    expect(req.request.params.has('owner')).toBe(false);
+    req.flush(pageOf([]));
+
+    const filters = fixture.nativeElement.querySelector('app-track-filters') as HTMLElement;
+    filters.querySelector<HTMLButtonElement>('.toggle')!.click();
+    fixture.detectChanges();
+    expect(filters.querySelector('input')).toBeNull();
+  });
+});
+
 describe('TracksPageComponent — lecture', () => {
   let http: HttpTestingController;
 

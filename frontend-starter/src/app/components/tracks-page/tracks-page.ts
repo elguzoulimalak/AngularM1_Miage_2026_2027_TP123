@@ -3,6 +3,8 @@ import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TrackFilters } from '../../shared/models/track-filters.model';
+import { TrackFiltersComponent } from '../track-filters/track-filters';
 import { Track, TrackVisibility } from '../../shared/models/track.model';
 import { TrackService } from '../../shared/services/track.service';
 import { FriendUser } from '../../shared/models/friend.model';
@@ -14,7 +16,7 @@ const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'a
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
 @Component({
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, TrackFiltersComponent],
   templateUrl: './tracks-page.html',
   styleUrl: './tracks-page.css',
 })
@@ -42,6 +44,13 @@ export class TracksPageComponent implements OnDestroy {
   readonly search = new FormControl('', { nonNullable: true });
   /** Search actually applied to the list (set when the user submits). */
   readonly activeSearch = signal('');
+  /** Advanced search filters (format, sort, owner). */
+  readonly filters = signal<TrackFilters>({});
+  /** True when a search or a filter narrows the list (for the empty message). */
+  readonly hasCriteria = computed(() => {
+    const f = this.filters();
+    return !!(this.activeSearch() || f.format || f.owner);
+  });
   readonly togglingId = signal<string | null>(null);
 
   /** TP4 étape 2 : partage avec les amis. */
@@ -94,7 +103,7 @@ export class TracksPageComponent implements OnDestroy {
   load(): void {
     this.loading.set(true);
     this.error.set('');
-    this.service.list(this.page(), 5, this.activeSearch()).subscribe({
+    this.service.list(this.page(), 5, this.activeSearch(), this.filters()).subscribe({
       next: (response) => {
         this.tracks.set(response.items);
         this.pages.set(response.pages);
@@ -108,6 +117,13 @@ export class TracksPageComponent implements OnDestroy {
   }
 
   /** Applies the search box and goes back to page 1. */
+  /** Called by the advanced filters panel. */
+  onFilters(filters: TrackFilters): void {
+    this.filters.set(filters);
+    this.page.set(1);
+    this.load();
+  }
+
   applySearch(): void {
     this.activeSearch.set(this.search.value.trim());
     this.page.set(1);

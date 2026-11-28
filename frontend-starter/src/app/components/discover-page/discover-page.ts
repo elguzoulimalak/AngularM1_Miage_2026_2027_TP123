@@ -1,9 +1,11 @@
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ActivityItem } from '../../shared/models/activity.model';
 import { FriendService } from '../../shared/services/friend.service';
+import { TrackFilters } from '../../shared/models/track-filters.model';
+import { TrackFiltersComponent } from '../track-filters/track-filters';
 import { Track } from '../../shared/models/track.model';
 import { AuthService } from '../../shared/services/auth.service';
 import { TrackService } from '../../shared/services/track.service';
@@ -23,7 +25,7 @@ export type DiscoverTab = 'public' | 'shared';
  * TP4 étape 3 : bloc « Activité de mes amis ».
  */
 @Component({
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, TrackFiltersComponent],
   templateUrl: './discover-page.html',
   styleUrl: './discover-page.css',
 })
@@ -41,6 +43,13 @@ export class DiscoverPageComponent implements OnDestroy {
   readonly error = signal('');
   readonly search = new FormControl('', { nonNullable: true });
   readonly activeSearch = signal('');
+  /** Advanced search filters (format, sort, owner). */
+  readonly filters = signal<TrackFilters>({});
+  /** True when a search or a filter narrows the list (for the empty message). */
+  readonly hasCriteria = computed(() => {
+    const f = this.filters();
+    return !!(this.activeSearch() || f.format || f.owner);
+  });
 
   readonly activity = signal<ActivityItem[]>([]);
   readonly activityLoading = signal(false);
@@ -84,8 +93,8 @@ export class DiscoverPageComponent implements OnDestroy {
     this.error.set('');
     const request =
       this.tab() === 'shared'
-        ? this.service.listShared(this.page(), PAGE_SIZE, this.activeSearch())
-        : this.service.listPublic(this.page(), PAGE_SIZE, this.activeSearch());
+        ? this.service.listShared(this.page(), PAGE_SIZE, this.activeSearch(), this.filters())
+        : this.service.listPublic(this.page(), PAGE_SIZE, this.activeSearch(), this.filters());
     request.subscribe({
       next: (response) => {
         this.tracks.set(response.items);
@@ -104,6 +113,13 @@ export class DiscoverPageComponent implements OnDestroy {
   selectTab(tab: DiscoverTab): void {
     if (this.tab() === tab) return;
     this.tab.set(tab);
+    this.page.set(1);
+    this.load();
+  }
+
+  /** Called by the advanced filters panel. */
+  onFilters(filters: TrackFilters): void {
+    this.filters.set(filters);
     this.page.set(1);
     this.load();
   }
