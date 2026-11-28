@@ -33,6 +33,17 @@ stocker, consulter, écouter et supprimer ses propres pistes audio.
 - suppression avec confirmation et notification ;
 - gestion des erreurs et des états de chargement.
 
+### Partage entre musiciens (TP4)
+
+- pistes privées par défaut, rendues publiques en un clic ;
+- recherche par titre dans ses pistes, les pistes publiques et les pistes partagées ;
+- page **Découvrir** : pistes publiques récentes et onglet « Partagées avec moi » ;
+- page **Amis** : invitation par email, acceptation, refus, retrait d’un ami ;
+- partage d’une piste privée avec des amis, et arrêt du partage à tout moment.
+
+Le détail se trouve dans [`REPORT.md`](REPORT.md) et
+[`md/TP4_CONCEPTION.md`](md/TP4_CONCEPTION.md).
+
 ### Tests
 
 Le frontend contient des tests ciblés pour :
@@ -121,6 +132,12 @@ npm start
 L’application est disponible sur `http://localhost:4200`.
 Le proxy Angular redirige les appels `/api` vers le backend local.
 
+> **Important :** lancez toujours le frontend avec `npm start`. Ce script
+> exécute `ng serve --proxy-config proxy.conf.json`. Avec `npx ng serve`
+> seul, le proxy n’est pas chargé : les appels `/api/...` partent vers le
+> serveur Angular (port 4200) au lieu de l’API (port 3000) et renvoient `404`.
+> Pensez aussi à démarrer le backend avant le frontend.
+
 ## Tests et build
 
 ### Tests backend
@@ -159,6 +176,15 @@ Toutes les routes sont préfixées par `/api`.
 | `POST` | `/tracks` | Upload d’une piste audio |
 | `GET` | `/tracks/:id/audio` | Lecture audio authentifiée |
 | `DELETE` | `/tracks/:id` | Suppression d’une piste |
+| `PATCH` | `/tracks/:id` | Changement de visibilité (TP4) |
+| `GET` | `/tracks/public` | Pistes publiques (TP4) |
+| `GET` | `/tracks/shared` | Pistes partagées avec moi (TP4) |
+| `PUT` / `DELETE` | `/tracks/:id/shares/:userId` | Partager / arrêter un partage (TP4) |
+| `GET` | `/friends` | Amis et invitations (TP4) |
+| `POST` | `/friends/requests` | Inviter un ami par email (TP4) |
+| `POST` | `/friends/requests/:id/accept` | Accepter une invitation (TP4) |
+| `DELETE` | `/friends/requests/:id` | Refuser / annuler une invitation (TP4) |
+| `DELETE` | `/friends/:userId` | Retirer un ami (TP4) |
 
 Les formats audio acceptés sont MP3, WAV, OGG et M4A, avec une taille
 maximale de 25 Mo.
@@ -179,7 +205,8 @@ La documentation complète est disponible dans
 ├── SUJET_ETUDIANT_TP2.md
 ├── SUJET_ETUDIANT_TP3.md
 ├── RAPPORT_IA_TP2.md
-└── RAPPORT_IA_TP3.md
+├── RAPPORT_IA_TP3.md
+└── REPORT.md             # Rapport du mini-projet TP4
 ```
 
 ## Documents du projet

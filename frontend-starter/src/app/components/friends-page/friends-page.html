@@ -1,0 +1,78 @@
+<section>
+  <div class="hero">
+    <p class="eyebrow">COMMUNAUTÉ</p>
+    <h1>Mes amis</h1>
+    <p>Invitez d'autres musiciens pour partager avec eux vos pistes privées.</p>
+  </div>
+
+  <div class="grid">
+    <article class="card">
+      <h2>Inviter un ami</h2>
+      <form (submit)="$event.preventDefault(); invite()" novalidate>
+        <label>Email
+          <input type="email" [formControl]="email" placeholder="ami@exemple.fr" autocomplete="off" />
+        </label>
+        @if (email.invalid && email.touched) {
+          <small class="error">Saisissez un email valide.</small>
+        }
+        @if (inviteError()) {
+          <p class="error" role="alert">{{ inviteError() }}</p>
+        }
+        <button type="submit" [disabled]="inviting()">{{ inviting() ? 'Envoi…' : 'Inviter' }}</button>
+      </form>
+
+      @if (outgoing().length) {
+        <h3>Invitations envoyées</h3>
+        <ul class="people">
+          @for (request of outgoing(); track request.id) {
+            <li>
+              <span><b>{{ request.user.name }}</b><small>{{ request.user.email }}</small></span>
+              <button type="button" class="ghost" (click)="cancel(request)" [disabled]="busyId() !== null">Annuler</button>
+            </li>
+          }
+        </ul>
+      }
+    </article>
+
+    <article class="card">
+      @if (loading()) {
+        <p class="status">Chargement…</p>
+      }
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+
+      @if (incoming().length) {
+        <h2>Invitations reçues</h2>
+        <ul class="people incoming">
+          @for (request of incoming(); track request.id) {
+            <li>
+              <span><b>{{ request.user.name }}</b><small>{{ request.user.email }}</small></span>
+              <span class="actions">
+                <button type="button" (click)="accept(request)" [disabled]="busyId() !== null">Accepter</button>
+                <button type="button" class="ghost" (click)="decline(request)" [disabled]="busyId() !== null">Refuser</button>
+              </span>
+            </li>
+          }
+        </ul>
+      }
+
+      <h2>Amis ({{ friends().length }})</h2>
+      <ul class="people friends">
+        @for (friend of friends(); track friend.friendshipId) {
+          <li>
+            <span><b>{{ friend.user.name }}</b><small>{{ friend.user.email }}</small></span>
+            <button type="button" class="danger" (click)="remove(friend)" [disabled]="busyId() !== null"
+              [attr.aria-label]="'Retirer ' + friend.user.name">
+              {{ busyId() === friend.user.id ? 'Retrait…' : 'Retirer' }}
+            </button>
+          </li>
+        } @empty {
+          @if (!loading()) {
+            <li class="empty-state">Pas encore d'amis. Invitez quelqu'un avec son email.</li>
+          }
+        }
+      </ul>
+    </article>
+  </div>
+</section>

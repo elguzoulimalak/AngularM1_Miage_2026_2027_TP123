@@ -82,6 +82,23 @@ describe('DiscoverPageComponent', () => {
     expect(component.playError()).toContain('rendue privée');
   });
 
+  it('l’onglet « Partagées avec moi » appelle /api/tracks/shared', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isPublicList).flush(pageOf([publicTrack]));
+    component.page.set(2);
+
+    component.selectTab('shared');
+    const req = http.expectOne((r) => r.url === '/api/tracks/shared');
+    expect(req.request.params.get('page')).toBe('1');
+    req.flush(pageOf([{ ...publicTrack, visibility: 'private', ownerName: 'Bob' }]));
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Partagées avec moi par mes amis');
+    expect(text).toContain('par Bob');
+  });
+
   it('affiche une erreur si le chargement échoue', () => {
     const fixture = TestBed.createComponent(DiscoverPageComponent);
     http.expectOne(isPublicList).flush({ message: 'Serveur indisponible' }, { status: 500, statusText: 'Server Error' });

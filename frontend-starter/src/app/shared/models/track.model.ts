@@ -12,5 +12,7 @@ export interface Track {
   mimeType: string;
   size: number;
   visibility: TrackVisibility;
+  /** Ids of the friends this track is shared with (only sent to the owner). */
+  sharedWith?: string[];
   createdAt: string;
 }

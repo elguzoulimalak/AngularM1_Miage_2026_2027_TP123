@@ -1,11 +1,16 @@
 <section>
   <div class="hero">
     <p class="eyebrow">DÉCOUVRIR</p>
-    <h1>Pistes publiques</h1>
-    <p>Écoutez les backing tracks partagées par toute la communauté.</p>
+    <h1>Pistes publiques et partagées</h1>
+    <p>Écoutez les backing tracks publiées par la communauté ou partagées par vos amis.</p>
   </div>
 
   <article class="card">
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" [class.active]="tab() === 'public'" [attr.aria-selected]="tab() === 'public'" (click)="selectTab('public')">Publiques</button>
+      <button type="button" role="tab" [class.active]="tab() === 'shared'" [attr.aria-selected]="tab() === 'shared'" (click)="selectTab('shared')">Partagées avec moi</button>
+    </div>
+
     <form class="search" role="search" (submit)="$event.preventDefault(); applySearch()">
       <input type="search" [formControl]="search" placeholder="Rechercher un titre…" aria-label="Rechercher dans les pistes publiques" maxlength="100" />
       <button type="submit">Rechercher</button>
@@ -17,6 +22,8 @@
     <h2>
       @if (activeSearch()) {
         Résultats pour « {{ activeSearch() }} » ({{ total() }})
+      } @else if (tab() === 'shared') {
+        Partagées avec moi par mes amis
       } @else {
         Récemment ajoutées
       }
@@ -50,7 +57,9 @@
         @if (!loading()) {
           <li class="empty-state">
             @if (activeSearch()) {
-              Aucune piste publique ne correspond à « {{ activeSearch() }} ».
+              Aucune piste ne correspond à « {{ activeSearch() }} ».
+            } @else if (tab() === 'shared') {
+              Aucun ami ne vous a encore partagé de piste.
             } @else {
               Aucune piste publique pour l'instant. Rendez une de vos pistes publique depuis « Backing tracks ».
             }

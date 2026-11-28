@@ -1,9 +1,12 @@
 import { Component, ElementRef, OnDestroy, computed, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Track, TrackVisibility } from '../../shared/models/track.model';
 import { TrackService } from '../../shared/services/track.service';
+import { FriendUser } from '../../shared/models/friend.model';
+import { FriendService } from '../../shared/services/friend.service';
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024;
 const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/mp4', 'audio/x-m4a'];
@@ -11,13 +14,14 @@ const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'a
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
 @Component({
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './tracks-page.html',
   styleUrl: './tracks-page.css',
 })
 export class TracksPageComponent implements OnDestroy {
   private readonly service = inject(TrackService);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly friendService = inject(FriendService);
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
 
   readonly tracks = signal<Track[]>([]);
@@ -39,6 +43,13 @@ export class TracksPageComponent implements OnDestroy {
   /** Search actually applied to the list (set when the user submits). */
   readonly activeSearch = signal('');
   readonly togglingId = signal<string | null>(null);
+
+  /** TP4 étape 2 : partage avec les amis. */
+  readonly sharingTrackId = signal<string | null>(null);
+  readonly friends = signal<FriendUser[] | null>(null);
+  readonly friendsError = signal('');
+  /** Id of the friend whose share is being changed. */
+  readonly shareBusyId = signal<string | null>(null);
 
   readonly uploadStatus = signal<UploadStatus>('idle');
   readonly uploadProgress = signal(0);
@@ -127,6 +138,57 @@ export class TracksPageComponent implements OnDestroy {
         this.togglingId.set(null);
         if (err.status === 401) return; // géré par l'intercepteur
         this.notify(err.error?.message ?? 'Impossible de changer la visibilité. Réessayez.');
+      },
+    });
+  }
+
+  /** Opens or closes the share panel of a track; friends are loaded once. */
+  toggleSharePanel(track: Track): void {
+    if (this.sharingTrackId() === track.id) {
+      this.sharingTrackId.set(null);
+      return;
+    }
+    this.sharingTrackId.set(track.id);
+    if (this.friends() === null) this.loadFriends();
+  }
+
+  private loadFriends(): void {
+    this.friendsError.set('');
+    this.friendService.overview().subscribe({
+      next: (overview) => this.friends.set(overview.friends.map((f) => f.user)),
+      error: (err: HttpErrorResponse) => {
+        if (err.status === 401) return;
+        this.friendsError.set(err.error?.message ?? 'Impossible de charger vos amis.');
+      },
+    });
+  }
+
+  isSharedWith(track: Track, userId: string): boolean {
+    return (track.sharedWith ?? []).includes(userId);
+  }
+
+  /** Shares the track with a friend, or stops the share if it already exists. */
+  toggleShare(track: Track, friend: FriendUser): void {
+    if (this.shareBusyId()) return;
+    const shared = this.isSharedWith(track, friend.id);
+    const request = shared ? this.service.unshare(track.id, friend.id) : this.service.share(track.id, friend.id);
+    this.shareBusyId.set(friend.id);
+    request.subscribe({
+      next: (updated) => {
+        this.shareBusyId.set(null);
+        this.tracks.update((list) =>
+          list.map((t) => (t.id === updated.id ? { ...t, sharedWith: updated.sharedWith ?? [] } : t)),
+        );
+        this.notify(
+          shared
+            ? `« ${track.title} » n'est plus partagée avec ${friend.name}.`
+            : `« ${track.title} » est partagée avec ${friend.name}.`,
+        );
+      },
+      error: (err: HttpErrorResponse) => {
+        this.shareBusyId.set(null);
+        if (err.status === 401) return;
+        this.notify(err.error?.message ?? 'Partage impossible. Réessayez.');
       },
     });
   }

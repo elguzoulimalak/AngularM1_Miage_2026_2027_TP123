@@ -26,6 +26,13 @@ const schema = new mongoose.Schema(
       default: "private",
       index: true,
     },
+    // TP4 étape 2 : amis avec qui une piste privée est partagée.
+    // Arrêter un partage retire simplement l'ami de ce tableau ($pull).
+    sharedWith: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+      index: true,
+    },
   },
   { timestamps: true },
 );
@@ -49,6 +56,7 @@ schema.methods.toPublic = function () {
     mimeType: this.mimeType,
     size: this.size,
     visibility: this.visibility ?? "private",
+    sharedWith: (this.sharedWith ?? []).map(String),
     createdAt: this.createdAt,
   };
 };

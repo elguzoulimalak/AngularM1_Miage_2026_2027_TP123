@@ -18,6 +18,21 @@ export class TrackService {
     return this.http.get<Page<Track>>('/api/tracks/public', { params: this.pageParams(page, limit, q) });
   }
 
+  /** Tracks that friends shared with me (TP4 step 2). */
+  listShared(page = 1, limit = 5, q = '') {
+    return this.http.get<Page<Track>>('/api/tracks/shared', { params: this.pageParams(page, limit, q) });
+  }
+
+  /** Shares one of my tracks with a friend. */
+  share(trackId: string, userId: string) {
+    return this.http.put<Track>(`/api/tracks/${trackId}/shares/${userId}`, {});
+  }
+
+  /** Stops sharing one of my tracks with a user. */
+  unshare(trackId: string, userId: string) {
+    return this.http.delete<Track>(`/api/tracks/${trackId}/shares/${userId}`);
+  }
+
   upload(file: File, title: string, visibility: TrackVisibility = 'private') {
     const body = new FormData();
     body.append('audio', file);

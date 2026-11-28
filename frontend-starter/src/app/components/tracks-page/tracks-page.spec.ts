@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Track } from '../../shared/models/track.model';
 import { TracksPageComponent } from './tracks-page';
@@ -143,6 +144,80 @@ describe('TracksPageComponent — visibilité et recherche (TP4)', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.empty-state')?.textContent).toContain('blues');
+  });
+});
+
+describe('TracksPageComponent — partage avec les amis (TP4 étape 2)', () => {
+  let http: HttpTestingController;
+  const snackBar = { open: vi.fn() };
+  const alice = { id: 'u2', name: 'Alice', email: 'alice@test.fr' };
+  const friendsResponse = {
+    friends: [{ friendshipId: 'f1', user: alice, since: '2026-11-28T00:00:00.000Z' }],
+    incoming: [],
+    outgoing: [],
+  };
+
+  beforeEach(() => {
+    snackBar.open.mockClear();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: MatSnackBar, useValue: snackBar },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('ouvre le panneau de partage et charge les amis une seule fois', () => {
+    const fixture = TestBed.createComponent(TracksPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isListRequest).flush(pageOf([track]));
+
+    component.toggleSharePanel(track);
+    http.expectOne('/api/friends').flush(friendsResponse);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.share-panel')?.textContent).toContain('Alice');
+
+    component.toggleSharePanel(track); // fermeture
+    component.toggleSharePanel(track); // réouverture : pas de nouvel appel
+    http.expectNone('/api/friends');
+  });
+
+  it('partage puis arrête le partage avec un ami', () => {
+    const fixture = TestBed.createComponent(TracksPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isListRequest).flush(pageOf([track]));
+
+    component.toggleShare(track, alice);
+    const share = http.expectOne('/api/tracks/t1/shares/u2');
+    expect(share.request.method).toBe('PUT');
+    share.flush({ ...track, sharedWith: ['u2'] });
+    expect(component.tracks()[0].sharedWith).toEqual(['u2']);
+    expect(snackBar.open).toHaveBeenCalledWith('« Ma piste » est partagée avec Alice.', 'Fermer', { duration: 4000 });
+
+    component.toggleShare(component.tracks()[0], alice);
+    const unshare = http.expectOne('/api/tracks/t1/shares/u2');
+    expect(unshare.request.method).toBe('DELETE');
+    unshare.flush({ ...track, sharedWith: [] });
+    expect(component.tracks()[0].sharedWith).toEqual([]);
+  });
+
+  it('affiche le message du serveur si le partage est refusé', () => {
+    const fixture = TestBed.createComponent(TracksPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isListRequest).flush(pageOf([track]));
+
+    component.toggleShare(track, alice);
+    http.expectOne('/api/tracks/t1/shares/u2').flush(
+      { message: "Vous ne pouvez partager qu'avec vos amis" },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    expect(component.shareBusyId()).toBeNull();
+    expect(snackBar.open).toHaveBeenCalledWith("Vous ne pouvez partager qu'avec vos amis", 'Fermer', { duration: 4000 });
   });
 });
 

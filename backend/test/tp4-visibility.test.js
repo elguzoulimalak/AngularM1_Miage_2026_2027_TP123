@@ -18,6 +18,7 @@ import {
   publicTracksFilter,
   readableTrackFilter,
 } from "../src/tracks/query.js";
+import { fakeQuery } from "./helpers.js";
 
 const SECRET = process.env.JWT_SECRET || "tp1-development-secret";
 const userId = new mongoose.Types.ObjectId().toString();
@@ -37,22 +38,6 @@ test.before(async () => {
 
 test.after(() => server.close());
 test.afterEach(() => mock.restoreAll());
-
-/** Doublure d'une requête Mongoose chaînable : find().sort().skip()...lean(). */
-function fakeQuery(result) {
-  const query = {
-    calls: {},
-    lean: () => Promise.resolve(result),
-    then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
-  };
-  for (const name of ["sort", "skip", "limit", "select", "populate"]) {
-    query[name] = (arg) => {
-      query.calls[name] = arg;
-      return query;
-    };
-  }
-  return query;
-}
 
 // ---------- Fonctions pures ----------
 
@@ -86,7 +71,7 @@ test("les filtres limitent bien la portée des requêtes", () => {
   assert.deepEqual(publicTracksFilter(), { visibility: "public" });
   assert.deepEqual(readableTrackFilter("t1", "u1"), {
     _id: "t1",
-    $or: [{ ownerId: "u1" }, { visibility: "public" }],
+    $or: [{ ownerId: "u1" }, { visibility: "public" }, { sharedWith: "u1" }],
   });
 });
 
@@ -136,7 +121,7 @@ test("GET /api/tracks/public renvoie les pistes publiques avec le nom du propri�
     visibility: "public",
     title: { $regex: "blu", $options: "i" },
   });
-  assert.deepEqual(query.calls.sort, { createdAt: -1 });
+  assert.deepEqual(query.calls.sort, [{ createdAt: -1 }]);
   assert.equal(body.total, 1);
   assert.equal(body.items[0].ownerName, "Malak");
   assert.equal(body.items[0].id, trackId);
@@ -215,12 +200,12 @@ test("PATCH /api/tracks/:id renvoie 404 pour un identifiant mal formé", async (
   assert.equal(r.status, 404);
 });
 
-test("GET /api/tracks/:id/audio autorise le propriétaire ou une piste publique", async () => {
+test("GET /api/tracks/:id/audio autorise le propriétaire, une piste publique ou partagée", async () => {
   const findOne = mock.method(Track, "findOne", () => fakeQuery(null));
   const r = await fetch(`${base}/api/tracks/${trackId}/audio`, { headers });
   assert.equal(r.status, 404);
   assert.deepEqual(findOne.mock.calls[0].arguments[0], {
     _id: trackId,
-    $or: [{ ownerId: userId }, { visibility: "public" }],
+    $or: [{ ownerId: userId }, { visibility: "public" }, { sharedWith: userId }],
   });
 });

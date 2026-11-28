@@ -93,6 +93,14 @@
               </button>
               <button
                 type="button"
+                class="visibility-btn"
+                (click)="toggleSharePanel(track)"
+                [attr.aria-expanded]="sharingTrackId() === track.id"
+              >
+                Partager{{ track.sharedWith?.length ? ' (' + track.sharedWith!.length + ')' : '' }}
+              </button>
+              <button
+                type="button"
                 class="delete-btn"
                 (click)="remove(track)"
                 [disabled]="deletingId() !== null"
@@ -101,6 +109,30 @@
                 {{ deletingId() === track.id ? 'Suppression…' : 'Supprimer' }}
               </button>
             </div>
+            @if (sharingTrackId() === track.id) {
+              <div class="share-panel">
+                <p class="share-panel__title">Partager avec mes amis</p>
+                @if (friendsError()) {
+                  <p class="error" role="alert">{{ friendsError() }}</p>
+                } @else if (friends() === null) {
+                  <p class="status">Chargement…</p>
+                } @else {
+                  @for (friend of friends(); track friend.id) {
+                    <label class="share-row">
+                      <input
+                        type="checkbox"
+                        [checked]="isSharedWith(track, friend.id)"
+                        [disabled]="shareBusyId() !== null"
+                        (change)="toggleShare(track, friend)"
+                      />
+                      {{ friend.name }}
+                    </label>
+                  } @empty {
+                    <p class="status">Aucun ami pour l'instant. <a routerLink="/friends">Inviter des amis</a></p>
+                  }
+                }
+              </div>
+            }
           </article>
         } @empty {
           @if (!loading()) {
