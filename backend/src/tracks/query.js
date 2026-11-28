@@ -56,14 +56,19 @@ export function publicTracksFilter(search = "") {
   return withSearch({ visibility: "public" }, search);
 }
 
+/** Filtre des pistes qu'un ami a partagées avec moi (TP4 étape 2). */
+export function sharedWithMeFilter(userId, search = "") {
+  return withSearch({ sharedWith: userId }, search);
+}
+
 /**
  * Filtre d'accès à une piste : son propriétaire peut toujours la lire,
- * les autres utilisateurs seulement si elle est publique.
+ * les autres utilisateurs seulement si elle est publique ou partagée avec eux.
  */
 export function readableTrackFilter(trackId, userId) {
   return {
     _id: trackId,
-    $or: [{ ownerId: userId }, { visibility: "public" }],
+    $or: [{ ownerId: userId }, { visibility: "public" }, { sharedWith: userId }],
   };
 }
 

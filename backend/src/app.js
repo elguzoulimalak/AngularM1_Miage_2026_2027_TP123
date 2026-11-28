@@ -9,6 +9,9 @@ import crypto from "node:crypto";
 import mongoose from "mongoose";
 import { User } from "./models/User.js";
 import { Track } from "./models/Track.js";
+import { Friendship } from "./models/Friendship.js";
+import { registerFriendRoutes } from "./friends/routes.js";
+import { friendshipBetweenFilter } from "./friends/logic.js";
 import {
   myTracksFilter,
   parsePagination,
@@ -16,6 +19,7 @@ import {
   parseVisibility,
   publicTracksFilter,
   readableTrackFilter,
+  sharedWithMeFilter,
 } from "./tracks/query.js";
 
 // Les fichiers audio restent sur le disque du serveur dans ce TP.
@@ -326,6 +330,7 @@ export function createApp() {
         __v: undefined,
         ownerId: String(track.ownerId),
         visibility: track.visibility ?? "private",
+        sharedWith: (track.sharedWith ?? []).map(String),
       }));
 
       console.log(`[tracks] ${publicItems.length} piste(s) envoyée(s) sur ${total}`);
@@ -343,56 +348,137 @@ export function createApp() {
   });
 
   /**
-   * TP4 : retourne une page des pistes publiques de tous les utilisateurs,
-   * des plus récentes aux plus anciennes, avec le nom de leur propriétaire.
-   * Le paramètre optionnel `q` filtre par titre.
+   * Fabrique un handler qui liste les pistes d'autres utilisateurs (publiques
+   * ou partagées avec moi), des plus récentes aux plus anciennes, avec le nom
+   * de leur propriétaire. Le paramètre optionnel `q` filtre par titre.
+   * La liste `sharedWith` n'est jamais renvoyée : elle ne regarde que le propriétaire.
    */
-  app.get("/api/tracks/public", auth, async (req, res, next) => {
+  function othersTracksHandler(label, buildFilter) {
+    return async (req, res, next) => {
+      try {
+        const { page, limit } = parsePagination(req.query);
+        const search = parseSearch(req.query.q);
+        if (search === null) {
+          console.warn(`[tracks] Recherche ${label} refusée : paramètre q invalide`);
+          return res.status(400).json({ message: "Recherche invalide (100 caractères maximum)" });
+        }
+
+        const filter = buildFilter(req, search);
+        console.log(`[tracks] Lecture ${label} page=${page}, limit=${limit}, q="${search}"`);
+
+        const [items, total] = await Promise.all([
+          Track.find(filter)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .select("-storedName")
+            // populate remplace ownerId par le document User, limité à son nom.
+            .populate("ownerId", "name")
+            .lean(),
+          Track.countDocuments(filter),
+        ]);
+
+        const publicItems = items.map((track) => ({
+          id: String(track._id),
+          ownerId: String(track.ownerId?._id ?? track.ownerId),
+          ownerName: track.ownerId?.name ?? "Utilisateur inconnu",
+          title: track.title,
+          originalName: track.originalName,
+          mimeType: track.mimeType,
+          size: track.size,
+          visibility: track.visibility ?? "private",
+          createdAt: track.createdAt,
+        }));
+
+        console.log(`[tracks] ${publicItems.length} piste(s) ${label} envoyée(s) sur ${total}`);
+        res.json({
+          items: publicItems,
+          page,
+          limit,
+          total,
+          pages: Math.max(1, Math.ceil(total / limit)),
+        });
+      } catch (error) {
+        console.error(`[tracks] Erreur de lecture des pistes (${label})`, error);
+        next(error);
+      }
+    };
+  }
+
+  /** TP4 : pistes publiques de tous les utilisateurs. */
+  app.get(
+    "/api/tracks/public",
+    auth,
+    othersTracksHandler("publique(s)", (_req, search) => publicTracksFilter(search)),
+  );
+
+  /** TP4 étape 2 : pistes que des amis ont partagées avec moi. */
+  app.get(
+    "/api/tracks/shared",
+    auth,
+    othersTracksHandler("partagée(s) avec moi", (req, search) => sharedWithMeFilter(req.auth.sub, search)),
+  );
+
+  /**
+   * TP4 étape 2 : partage une piste avec un ami. Seul le propriétaire peut
+   * partager, et seulement avec un ami accepté. $addToSet évite les doublons.
+   */
+  app.put("/api/tracks/:id/shares/:userId", auth, async (req, res, next) => {
     try {
-      const { page, limit } = parsePagination(req.query);
-      const search = parseSearch(req.query.q);
-      if (search === null) {
-        console.warn("[tracks] Recherche publique refusée : paramètre q invalide");
-        return res.status(400).json({ message: "Recherche invalide (100 caractères maximum)" });
+      const { id, userId } = req.params;
+      if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(userId)) {
+        return res.status(404).json({ message: "Piste ou ami inconnu" });
       }
 
-      const filter = publicTracksFilter(search);
-      console.log(`[tracks] Lecture publique page=${page}, limit=${limit}, q="${search}"`);
-
-      const [items, total] = await Promise.all([
-        Track.find(filter)
-          .sort({ createdAt: -1 })
-          .skip((page - 1) * limit)
-          .limit(limit)
-          .select("-storedName")
-          // populate remplace ownerId par le document User, limité à son nom.
-          .populate("ownerId", "name")
-          .lean(),
-        Track.countDocuments(filter),
-      ]);
-
-      const publicItems = items.map((track) => ({
-        id: String(track._id),
-        ownerId: String(track.ownerId?._id ?? track.ownerId),
-        ownerName: track.ownerId?.name ?? "Utilisateur inconnu",
-        title: track.title,
-        originalName: track.originalName,
-        mimeType: track.mimeType,
-        size: track.size,
-        visibility: "public",
-        createdAt: track.createdAt,
-      }));
-
-      console.log(`[tracks] ${publicItems.length} piste(s) publique(s) envoyée(s) sur ${total}`);
-      res.json({
-        items: publicItems,
-        page,
-        limit,
-        total,
-        pages: Math.max(1, Math.ceil(total / limit)),
+      const friendship = await Friendship.findOne({
+        ...friendshipBetweenFilter(req.auth.sub, userId),
+        status: "accepted",
       });
+      if (!friendship) {
+        console.warn(`[shares] Partage refusé : ${userId} n'est pas ami avec ${req.auth.sub}`);
+        return res.status(403).json({ message: "Vous ne pouvez partager qu'avec vos amis" });
+      }
+
+      const track = await Track.findOneAndUpdate(
+        { _id: id, ownerId: req.auth.sub },
+        { $addToSet: { sharedWith: userId } },
+        { new: true },
+      );
+      if (!track) {
+        console.warn(`[shares] Piste inconnue ou interdite : ${id}`);
+        return res.status(404).json({ message: "Piste inconnue" });
+      }
+
+      console.log(`[shares] Piste ${track.id} partagée avec ${userId}`);
+      res.json(track.toPublic());
     } catch (error) {
-      console.error("[tracks] Erreur de lecture des pistes publiques", error);
+      console.error("[shares] Erreur de partage", error);
+      next(error);
+    }
+  });
+
+  /** TP4 étape 2 : arrête le partage d'une piste avec un utilisateur. */
+  app.delete("/api/tracks/:id/shares/:userId", auth, async (req, res, next) => {
+    try {
+      const { id, userId } = req.params;
+      if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(userId)) {
+        return res.status(404).json({ message: "Piste ou ami inconnu" });
+      }
+
+      const track = await Track.findOneAndUpdate(
+        { _id: id, ownerId: req.auth.sub },
+        { $pull: { sharedWith: userId } },
+        { new: true },
+      );
+      if (!track) {
+        console.warn(`[shares] Arrêt de partage impossible : ${id}`);
+        return res.status(404).json({ message: "Piste inconnue" });
+      }
+
+      console.log(`[shares] Partage de ${track.id} avec ${userId} arrêté`);
+      res.json(track.toPublic());
+    } catch (error) {
+      console.error("[shares] Erreur d'arrêt de partage", error);
       next(error);
     }
   });
@@ -550,6 +636,9 @@ export function createApp() {
       next(error);
     }
   });
+
+  // TP4 étape 2 : invitations, amis et retrait d'un ami.
+  registerFriendRoutes(app, auth);
 
   /** Gestionnaire central des erreurs connues de l'application. */
   app.use((error, _req, res, next) => {

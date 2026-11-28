@@ -58,6 +58,23 @@ describe('TrackService', () => {
     req.flush({});
   });
 
+  it('listShared(), share() et unshare() utilisent les routes de partage', () => {
+    service.listShared(1, 5, 'riff').subscribe();
+    const list = http.expectOne((r) => r.url === '/api/tracks/shared');
+    expect(list.request.params.get('q')).toBe('riff');
+    list.flush({ items: [], page: 1, limit: 5, total: 0, pages: 1 });
+
+    service.share('t1', 'u2').subscribe();
+    const share = http.expectOne('/api/tracks/t1/shares/u2');
+    expect(share.request.method).toBe('PUT');
+    share.flush({});
+
+    service.unshare('t1', 'u2').subscribe();
+    const unshare = http.expectOne('/api/tracks/t1/shares/u2');
+    expect(unshare.request.method).toBe('DELETE');
+    unshare.flush({});
+  });
+
   it('delete() appelle DELETE /api/tracks/:id', () => {
     service.delete('abc123').subscribe();
 

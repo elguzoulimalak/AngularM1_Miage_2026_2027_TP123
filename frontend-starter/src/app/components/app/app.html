@@ -7,6 +7,7 @@
     @if (auth.isAuthenticated()) {
       <a routerLink="/tracks">Backing tracks</a>
       <a routerLink="/discover">Découvrir</a>
+      <a routerLink="/friends">Amis</a>
       <a routerLink="/profile">Profil</a>
       <button type="button" (click)="logout()">Déconnexion</button>
     } @else {

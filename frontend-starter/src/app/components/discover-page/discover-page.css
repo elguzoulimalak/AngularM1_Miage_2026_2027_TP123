@@ -33,3 +33,7 @@
   border-radius: 12px;
 }
 .status { color: #61756f; }
+
+.tabs { display: flex; gap: 0.4rem; margin-bottom: 1rem; }
+.tabs button { color: #1d755e; background: transparent; border: 1px solid #b8cbc5; }
+.tabs button.active { color: white; background: #1d755e; border-color: #1d755e; }
