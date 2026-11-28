@@ -10,6 +10,7 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { createApp } from "../src/app.js";
 import { Track } from "../src/models/Track.js";
+import { Activity } from "../src/models/Activity.js";
 import {
   escapeRegex,
   myTracksFilter,
@@ -37,6 +38,8 @@ test.before(async () => {
 });
 
 test.after(() => server.close());
+// Le journal d'activité (étape 3) est simulé : pas d'écriture MongoDB.
+test.beforeEach(() => mock.method(Activity, "create", () => Promise.resolve({})));
 test.afterEach(() => mock.restoreAll());
 
 // ---------- Fonctions pures ----------

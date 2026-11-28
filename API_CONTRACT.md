@@ -25,6 +25,7 @@ Le contrat HTTP ne dépend pas du choix de persistance : le backend fourni utili
 | POST | `/friends/requests/:id/accept` | JWT | `200 {id,status}` |
 | DELETE | `/friends/requests/:id` | JWT | `204` |
 | DELETE | `/friends/:userId` | JWT | `204` |
+| GET | `/activity?limit=10` | JWT | `200 {items: ActivityItem[]}` |
 
 `Page<Track>` contient `items`, `page`, `limit`, `total` et `pages`. Formats acceptés : MP3, WAV, OGG et M4A, 25 Mo maximum.
 
@@ -55,3 +56,12 @@ Erreurs courantes : `400` validation, `401` authentification, `404` ressource, `
 - **`GET /tracks/shared`** (JWT) : pistes que des amis m'ont partagées, les plus récentes d'abord. Mêmes paramètres (`page`, `limit`, `q`) et erreurs que `GET /tracks/public`.
 - **`PUT /tracks/:id/shares/:userId`** (JWT) : partage une de mes pistes avec un ami. L'opération est idempotente (`$addToSet`). Réponse `200 Track`. Erreurs : `401`, `403` si `userId` n'est pas un ami accepté, `404` si la piste est inconnue ou appartient à un autre utilisateur.
 - **`DELETE /tracks/:id/shares/:userId`** (JWT) : arrête le partage. L'ami ne voit plus la piste et ne peut plus l'écouter. Réponse `200 Track`. Erreurs : `401`, `404`.
+
+
+## TP4 étape 3 - fil d'activité des amis
+
+- **`GET /activity`** (JWT) : dernières actions de mes amis acceptés, des plus récentes aux plus anciennes. Paramètre `limit` optionnel (1 à 50, défaut 10 ; une valeur invalide donne 10). Réponse `200 { items: ActivityItem[] }`, avec `ActivityItem` = `{ id, type, at, user: { id, name }, track: { id, title } }`. Erreur : `401`.
+  - `type: "track_published"` : l'ami a rendu une piste publique, à l'upload ou avec `PATCH /tracks/:id`.
+  - `type: "track_shared"` : l'ami a partagé une piste **avec moi** (`PUT /tracks/:id/shares/:userId`). Les partages avec d'autres personnes ne sont jamais montrés.
+  - Un événement disparaît du fil dès que la piste est supprimée, redevient privée ou n'est plus partagée avec moi. Il disparaît aussi si l'auteur n'est plus mon ami. Pour une même piste et un même type, seul l'événement le plus récent est gardé.
+  - Les événements sont enregistrés par `POST /tracks` (si `visibility = public`), `PATCH /tracks/:id` (passage en public) et `PUT /tracks/:id/shares/:userId`. Ces routes ne changent pas de contrat : si l'enregistrement de l'événement échoue, l'erreur est journalisée et la réponse reste un succès.

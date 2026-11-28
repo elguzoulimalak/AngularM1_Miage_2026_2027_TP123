@@ -1,11 +1,15 @@
 import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { ActivityItem } from '../../shared/models/activity.model';
+import { FriendService } from '../../shared/services/friend.service';
 import { Track } from '../../shared/models/track.model';
 import { AuthService } from '../../shared/services/auth.service';
 import { TrackService } from '../../shared/services/track.service';
 
 const PAGE_SIZE = 10;
+const ACTIVITY_SIZE = 8;
 
 /** Which list is shown: public tracks, or tracks friends shared with me. */
 export type DiscoverTab = 'public' | 'shared';
@@ -16,15 +20,17 @@ export type DiscoverTab = 'public' | 'shared';
  * par titre et la lecture audio.
  * TP4 étape 2 : onglet « Partagées avec moi » pour les pistes privées
  * que des amis ont partagées.
+ * TP4 étape 3 : bloc « Activité de mes amis ».
  */
 @Component({
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './discover-page.html',
   styleUrl: './discover-page.css',
 })
 export class DiscoverPageComponent implements OnDestroy {
   private readonly service = inject(TrackService);
   private readonly auth = inject(AuthService);
+  private readonly friendService = inject(FriendService);
 
   readonly tab = signal<DiscoverTab>('public');
   readonly tracks = signal<Track[]>([]);
@@ -36,6 +42,10 @@ export class DiscoverPageComponent implements OnDestroy {
   readonly search = new FormControl('', { nonNullable: true });
   readonly activeSearch = signal('');
 
+  readonly activity = signal<ActivityItem[]>([]);
+  readonly activityLoading = signal(false);
+  readonly activityError = signal('');
+
   readonly audioUrl = signal('');
   readonly playingId = signal<string | null>(null);
   readonly playingTitle = signal('');
@@ -44,6 +54,29 @@ export class DiscoverPageComponent implements OnDestroy {
 
   constructor() {
     this.load();
+    this.loadActivity();
+  }
+
+  /** Loads the friends activity feed (independent from the track list). */
+  loadActivity(): void {
+    this.activityLoading.set(true);
+    this.activityError.set('');
+    this.friendService.activity(ACTIVITY_SIZE).subscribe({
+      next: (feed) => {
+        this.activity.set(feed.items);
+        this.activityLoading.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.activityLoading.set(false);
+        if (err.status === 401) return;
+        this.activityError.set(err.error?.message ?? "Impossible de charger l'activité de vos amis.");
+      },
+    });
+  }
+
+  /** Short sentence describing an activity event. */
+  describe(item: ActivityItem): string {
+    return item.type === 'track_shared' ? 'vous a partagé' : 'a publié';
   }
 
   load(): void {
@@ -97,7 +130,8 @@ export class DiscoverPageComponent implements OnDestroy {
     return !!me && me.id === track.ownerId;
   }
 
-  play(track: Track): void {
+  /** Plays a track; only its id and title are needed (list item or activity event). */
+  play(track: Pick<Track, 'id' | 'title'>): void {
     if (this.loadingAudioId()) return;
     this.playError.set('');
     this.loadingAudioId.set(track.id);

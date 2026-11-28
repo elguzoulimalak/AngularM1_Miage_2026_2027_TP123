@@ -42,13 +42,14 @@ Alternatives envisagées : un seul écran avec onglets « Mes pistes / Publiques
 - **Routes** : `GET /api/tracks/public` (liste publique paginée, avec `ownerName` grâce à `populate`) et `PATCH /api/tracks/:id` (changer la visibilité) ; `q` est ajouté à `GET /api/tracks`. Tout est documenté dans `API_CONTRACT.md`.
 - **Amis (étape 2)** : une collection `Friendship { requester, recipient, status: pending|accepted }`, avec un index unique sur la paire. Une collection séparée évite de dupliquer la relation dans les deux documents `User`.
 - **Partage (étape 2)** : un tableau `sharedWith: [ObjectId]` sur `Track`. Arrêter un partage revient à faire `$pull` ; retirer un ami retire aussi ses partages.
+- **Activité (étape 3)** : une collection `Activity { actor, type, track, target }` écrite au moment de l'action. Calculer le fil uniquement à partir des pistes ne donne pas la date d'un passage en public ni celle d'un partage : `createdAt` est la date d'upload, et `updatedAt` change à chaque modification. Le journal n'est jamais modifié. Les événements devenus invalides (piste supprimée, redevenue privée, partage arrêté, ami retiré) sont filtrés à la lecture.
 - **Tests** : les fonctions de filtrage et de validation sont extraites dans `backend/src/tracks/query.js` et testées sans base de données. Les routes sont testées en HTTP avec des doublures (`mock.method`) des méthodes Mongoose, ce qui permet de lancer `npm test` sans MongoDB Atlas. Côté Angular, on utilise Vitest avec `HttpTestingController`.
 
 ## 4. Découpage du travail
 
 1. **Étape 1 : visibilité public/privé et recherche** (F1 à F4). Terminée (PR #2).
-2. **Étape 2 : amis et partage révocable** (F5, F6). Modèle `Friendship`, routes d'invitation, d'acceptation et de suppression, page `/friends`, `sharedWith`, routes de partage et de retrait, panneau « Partager », onglet « Partagées avec moi ».
-3. **Étape 3 : activité des amis** (F7). Fil d'activité calculé à partir des pistes récentes des amis.
+2. **Étape 2 : amis et partage révocable** (F5, F6). Terminée (PR #3). Modèle `Friendship`, routes d'invitation, d'acceptation et de suppression, page `/friends`, `sharedWith`, routes de partage et de retrait, panneau « Partager », onglet « Partagées avec moi ».
+3. **Étape 3 : activité des amis** (F7). Journal `Activity` écrit lors des publications et partages, et route `GET /api/activity` qui filtre à la lecture. Le fil est affiché dans Découvrir.
 4. **Étape 4 : finitions.** Recherche avancée (F8), compléments au `REPORT.md`, captures Network.
 
 Chaque étape fait l'objet d'une branche, de tests unitaires et d'une mise à jour de `REPORT.md`.

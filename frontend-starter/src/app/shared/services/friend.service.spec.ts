@@ -33,6 +33,14 @@ describe('FriendService', () => {
     req.flush({});
   });
 
+  it('activity() appelle GET /api/activity avec la limite', () => {
+    service.activity(5).subscribe();
+    const req = http.expectOne((r) => r.url === '/api/activity');
+    expect(req.request.method).toBe('GET');
+    expect(req.request.params.get('limit')).toBe('5');
+    req.flush({ items: [] });
+  });
+
   it('accept(), cancelRequest() et remove() utilisent les bonnes routes', () => {
     service.accept('r1').subscribe();
     const accept = http.expectOne('/api/friends/requests/r1/accept');

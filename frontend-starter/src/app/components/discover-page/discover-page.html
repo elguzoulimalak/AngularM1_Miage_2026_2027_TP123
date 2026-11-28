@@ -5,6 +5,7 @@
     <p>Écoutez les backing tracks publiées par la communauté ou partagées par vos amis.</p>
   </div>
 
+  <div class="layout">
   <article class="card">
     <div class="tabs" role="tablist">
       <button type="button" role="tab" [class.active]="tab() === 'public'" [attr.aria-selected]="tab() === 'public'" (click)="selectTab('public')">Publiques</button>
@@ -85,4 +86,34 @@
       <audio [src]="audioUrl()" controls autoplay (ended)="playingId.set(null)"></audio>
     }
   </article>
+
+  <aside class="card activity" aria-labelledby="activity-title">
+    <div class="row">
+      <h2 id="activity-title">Activité de mes amis</h2>
+      <button type="button" class="link-btn" (click)="loadActivity()" [disabled]="activityLoading()">Actualiser</button>
+    </div>
+    @if (activityError()) {
+      <p class="error" role="alert">{{ activityError() }}</p>
+    }
+    <ul class="feed">
+      @for (item of activity(); track item.id) {
+        <li [class.playing]="playingId() === item.track.id">
+          <span class="feed__icon" aria-hidden="true">{{ item.type === 'track_shared' ? '🔗' : '🎸' }}</span>
+          <span class="feed__text">
+            <b>{{ item.user.name }}</b> {{ describe(item) }} « {{ item.track.title }} »
+            <small>{{ formatDate(item.at) }}</small>
+          </span>
+          <button type="button" class="play-btn" (click)="play(item.track)" [disabled]="loadingAudioId() !== null"
+            [attr.aria-label]="'Lire ' + item.track.title">▶</button>
+        </li>
+      } @empty {
+        @if (!activityLoading() && !activityError()) {
+          <li class="empty-state">
+            Rien de nouveau chez vos amis. <a routerLink="/friends">Inviter des amis</a>
+          </li>
+        }
+      }
+    </ul>
+  </aside>
+  </div>
 </section>

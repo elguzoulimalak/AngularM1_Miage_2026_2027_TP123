@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FriendsOverview, InviteResult } from '../models/friend.model';
+import { ActivityFeed } from '../models/activity.model';
 
 /** HTTP operations for friends and invitations (TP4 step 2). */
 @Injectable({ providedIn: 'root' })
@@ -22,6 +23,11 @@ export class FriendService {
   /** Declines a received invitation or cancels a sent one. */
   cancelRequest(requestId: string) {
     return this.http.delete<void>(`/api/friends/requests/${requestId}`);
+  }
+
+  /** Latest actions of my friends: public tracks and tracks shared with me. */
+  activity(limit = 10) {
+    return this.http.get<ActivityFeed>('/api/activity', { params: { limit } });
   }
 
   /** Removes a friend; the backend also stops every share between the two users. */
