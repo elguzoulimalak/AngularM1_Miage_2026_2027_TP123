@@ -49,7 +49,7 @@ Alternatives envisagées : un seul écran avec onglets « Mes pistes / Publiques
 
 1. **Étape 1 : visibilité public/privé et recherche** (F1 à F4). Terminée (PR #2).
 2. **Étape 2 : amis et partage révocable** (F5, F6). Terminée (PR #3). Modèle `Friendship`, routes d'invitation, d'acceptation et de suppression, page `/friends`, `sharedWith`, routes de partage et de retrait, panneau « Partager », onglet « Partagées avec moi ».
-3. **Étape 3 : activité des amis** (F7). Journal `Activity` écrit lors des publications et partages, et route `GET /api/activity` qui filtre à la lecture. Le fil est affiché dans Découvrir.
-4. **Étape 4 : finitions.** Recherche avancée (F8), compléments au `REPORT.md`, captures Network.
+3. **Étape 3 : activité des amis** (F7). Terminée (PR #4). Journal `Activity` écrit lors des publications et partages, et route `GET /api/activity` qui filtre à la lecture. Le fil est affiché dans Découvrir.
+4. **Étape 4 : finitions.** Recherche avancée (F8 : format, tri, propriétaire), faite dans la PR suivante. Restent les compléments au `REPORT.md` et les captures Network.
 
 Chaque étape fait l'objet d'une branche, de tests unitaires et d'une mise à jour de `REPORT.md`.

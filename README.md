@@ -37,6 +37,7 @@ stocker, consulter, écouter et supprimer ses propres pistes audio.
 
 - pistes privées par défaut, rendues publiques en un clic ;
 - recherche par titre dans ses pistes, les pistes publiques et les pistes partagées ;
+- **filtres avancés** : format, tri (récentes, anciennes, titre, taille) et propriétaire ;
 - page **Découvrir** : pistes publiques récentes et onglet « Partagées avec moi » ;
 - page **Amis** : invitation par email, acceptation, refus, retrait d’un ami ;
 - partage d’une piste privée avec des amis, et arrêt du partage à tout moment ;

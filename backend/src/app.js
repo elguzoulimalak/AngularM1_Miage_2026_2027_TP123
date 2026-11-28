@@ -16,8 +16,10 @@ import { recordActivity } from "./activity/record.js";
 import { registerActivityRoutes } from "./activity/routes.js";
 import {
   myTracksFilter,
+  ownerNameFilter,
   parsePagination,
-  parseSearch,
+  parseTrackQuery,
+  sortOptions,
   parseVisibility,
   publicTracksFilter,
   readableTrackFilter,
@@ -297,25 +299,38 @@ export function createApp() {
   });
 
   /**
+   * Applique le tri et, pour le tri par titre, la collation française.
+   * `collation` n'est appelée que si nécessaire (voir sortOptions).
+   */
+  function sorted(query, sort) {
+    const options = sortOptions(sort);
+    const result = query.sort(options.sort);
+    return options.collation ? result.collation(options.collation) : result;
+  }
+
+  /**
    * Retourne une page des pistes appartenant exclusivement à l'utilisateur.
-   * TP4 : le paramètre optionnel `q` filtre les pistes par titre.
+   * TP4 : paramètres optionnels `q` (titre), `format` (mp3, wav, ogg, m4a)
+   * et `sort` (recent, oldest, title, size).
    */
   app.get("/api/tracks", auth, async (req, res, next) => {
     try {
       const { page, limit } = parsePagination(req.query);
-      const search = parseSearch(req.query.q);
-      if (search === null) {
-        console.warn("[tracks] Recherche refusée : paramètre q invalide");
-        return res.status(400).json({ message: "Recherche invalide (100 caractères maximum)" });
+      const parsed = parseTrackQuery(req.query);
+      if (parsed.error) {
+        console.warn(`[tracks] Recherche refusée : ${parsed.error}`);
+        return res.status(400).json({ message: parsed.error });
       }
+      const { search, format, sort } = parsed;
 
-      const filter = myTracksFilter(req.auth.sub, search);
-      console.log(`[tracks] Lecture page=${page}, limit=${limit}, q="${search}", user=${req.auth.sub}`);
+      const filter = myTracksFilter(req.auth.sub, search, format);
+      console.log(
+        `[tracks] Lecture page=${page}, limit=${limit}, q="${search}", format="${format}", sort=${sort}, user=${req.auth.sub}`,
+      );
 
       // La lecture des pistes et le comptage total sont parallélisés pour réduire la latence.
       const [items, total] = await Promise.all([
-        Track.find(filter)
-          .sort({ createdAt: -1 })
+        sorted(Track.find(filter), sort)
           .skip((page - 1) * limit)
           .limit(limit)
           .select("-storedName")
@@ -351,26 +366,39 @@ export function createApp() {
 
   /**
    * Fabrique un handler qui liste les pistes d'autres utilisateurs (publiques
-   * ou partagées avec moi), des plus récentes aux plus anciennes, avec le nom
-   * de leur propriétaire. Le paramètre optionnel `q` filtre par titre.
+   * ou partagées avec moi), avec le nom de leur propriétaire.
+   * Paramètres optionnels : `q` (titre), `format`, `sort` et `owner`
+   * (partie du nom du propriétaire).
    * La liste `sharedWith` n'est jamais renvoyée : elle ne regarde que le propriétaire.
    */
   function othersTracksHandler(label, buildFilter) {
     return async (req, res, next) => {
       try {
         const { page, limit } = parsePagination(req.query);
-        const search = parseSearch(req.query.q);
-        if (search === null) {
-          console.warn(`[tracks] Recherche ${label} refusée : paramètre q invalide`);
-          return res.status(400).json({ message: "Recherche invalide (100 caractères maximum)" });
+        const parsed = parseTrackQuery(req.query);
+        if (parsed.error) {
+          console.warn(`[tracks] Recherche ${label} refusée : ${parsed.error}`);
+          return res.status(400).json({ message: parsed.error });
         }
+        const { search, format, sort, owner } = parsed;
 
-        const filter = buildFilter(req, search);
-        console.log(`[tracks] Lecture ${label} page=${page}, limit=${limit}, q="${search}"`);
+        let filter = buildFilter(req, search, format);
+        if (owner) {
+          // Recherche par propriétaire : on cherche d'abord les utilisateurs
+          // dont le nom correspond, puis leurs pistes.
+          const owners = await User.find(ownerNameFilter(owner)).select("_id").limit(100).lean();
+          if (owners.length === 0) {
+            console.log(`[tracks] Aucun propriétaire ne correspond à "${owner}"`);
+            return res.json({ items: [], page, limit, total: 0, pages: 1 });
+          }
+          filter = { ...filter, ownerId: { $in: owners.map((u) => u._id) } };
+        }
+        console.log(
+          `[tracks] Lecture ${label} page=${page}, limit=${limit}, q="${search}", format="${format}", sort=${sort}, owner="${owner}"`,
+        );
 
         const [items, total] = await Promise.all([
-          Track.find(filter)
-            .sort({ createdAt: -1 })
+          sorted(Track.find(filter), sort)
             .skip((page - 1) * limit)
             .limit(limit)
             .select("-storedName")
@@ -411,14 +439,14 @@ export function createApp() {
   app.get(
     "/api/tracks/public",
     auth,
-    othersTracksHandler("publique(s)", (_req, search) => publicTracksFilter(search)),
+    othersTracksHandler("publique(s)", (_req, search, format) => publicTracksFilter(search, format)),
   );
 
   /** TP4 étape 2 : pistes que des amis ont partagées avec moi. */
   app.get(
     "/api/tracks/shared",
     auth,
-    othersTracksHandler("partagée(s) avec moi", (req, search) => sharedWithMeFilter(req.auth.sub, search)),
+    othersTracksHandler("partagée(s) avec moi", (req, search, format) => sharedWithMeFilter(req.auth.sub, search, format)),
   );
 
   /**

@@ -185,3 +185,56 @@ Côté frontend, les nouveaux tests couvrent :
 3. A arrête le partage ou rend la piste privée : après « Actualiser », l'événement disparaît chez B.
 
 Note : les actions faites avant cette étape n'apparaissent pas dans le fil, car le journal commence avec cette version.
+
+Vérification manuelle faite par l'équipe sur MongoDB Atlas : le fil d'activité fonctionne.
+
+## Finition : recherche avancée
+
+### Travail effectué
+
+**Backend (`backend/`)**
+- `src/tracks/query.js` :
+  - tables `FORMATS` (format vers types MIME) et `SORTS` ;
+  - fonctions pures `parseFormat`, `parseSort`, `parseTrackQuery` (valide `q`, `format`, `sort` et `owner` en une fois), `sortOptions` et `ownerNameFilter` ;
+  - `myTracksFilter`, `publicTracksFilter` et `sharedWithMeFilter` acceptent un format.
+- `app.js` : les trois listes (`/tracks`, `/tracks/public`, `/tracks/shared`) acceptent `format` et `sort`. Les listes publique et partagée acceptent aussi `owner`. Pour ce dernier, on cherche d'abord les utilisateurs dont le nom correspond, puis on filtre sur `ownerId: { $in: ... }`.
+- `API_CONTRACT.md` et `README.md` sont mis à jour.
+
+**Frontend (`frontend-starter/`)**
+- Nouveau composant réutilisable **`app-track-filters`** : un bouton « Filtres avancés » avec le nombre de filtres actifs, et un panneau avec Format, Trier par, Propriétaire (en option) et Réinitialiser.
+- Le composant est utilisé dans **Backing tracks** (sans propriétaire) et dans **Découvrir** (avec propriétaire). Les filtres sont gardés quand on change d'onglet.
+- `TrackService.list`, `listPublic` et `listShared` acceptent un objet `TrackFilters`. Seuls les paramètres utiles sont envoyés : pas de `format` vide, ni de `sort=recent`.
+
+### Choix techniques
+
+- **Un format correspond à une liste de types MIME** (`$in`), car un même format peut arriver avec plusieurs types (`audio/wav` et `audio/x-wav`, par exemple).
+- **Liste blanche pour le tri** : seules les clés de `SORTS` sont acceptées, donc l'utilisateur ne peut jamais trier sur un champ arbitraire. `Object.hasOwn` évite que `toString` ou `constructor` passent pour des valeurs valides.
+- **Collation française seulement pour le tri par titre** : « école » et « Ecole » sont rangés ensemble. Les autres tris n'en ont pas, ce qui laisse MongoDB utiliser les index existants.
+- **Recherche par propriétaire en deux temps** (utilisateurs, puis pistes) plutôt qu'un `$lookup` : c'est plus simple, et chaque requête peut utiliser son index. Le nombre de propriétaires est limité à 100 par recherche.
+- **Un composant de filtres partagé**, pour ne pas dupliquer le formulaire entre deux pages. Il n'émet que si les filtres changent vraiment.
+
+### Résultats des tests
+
+| Partie | Commande | Résultat |
+|---|---|---|
+| Backend | `cd backend && npm test` | **63 / 63** réussis (12 nouveaux dans `test/tp4-advanced-search.test.js`) |
+| Frontend | `cd frontend-starter && npm test` | **57 / 57** réussis (12 fichiers ; 9 nouveaux) |
+| Frontend | `npm run build` | build OK, sans avertissement |
+
+Côté backend, les nouveaux tests couvrent :
+- la validation de `format` et `sort`, y compris `toString` et un tableau ;
+- les messages d'erreur de `parseTrackQuery` ;
+- le filtre `$in` sur les types MIME ;
+- la collation, utilisée seulement pour le tri par titre ;
+- l'échappement de `owner` ;
+- les routes : format avec tri par titre, ordre par défaut, `400` sans lecture de la base, filtre par propriétaire, page vide sans propriétaire correspondant, combinaison partage + format + taille.
+
+Côté frontend, les nouveaux tests couvrent :
+- les paramètres envoyés par le service ;
+- le composant de filtres : ouverture, émission, pas de doublon, champ propriétaire, réinitialisation ;
+- la page Découvrir : retour à la page 1, message « aucun résultat », filtres gardés en changeant d'onglet ;
+- la page Backing tracks : recherche et filtres combinés, pas de champ propriétaire.
+
+### À vérifier manuellement (MongoDB Atlas)
+
+Dans Découvrir, ouvrir « Filtres avancés », choisir un format, trier par titre et saisir une partie du nom d'un ami. Vérifier dans l'onglet Network que `GET /api/tracks/public?...&format=...&sort=title&owner=...` renvoie les bonnes pistes.
