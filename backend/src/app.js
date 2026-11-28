@@ -12,6 +12,8 @@ import { Track } from "./models/Track.js";
 import { Friendship } from "./models/Friendship.js";
 import { registerFriendRoutes } from "./friends/routes.js";
 import { friendshipBetweenFilter } from "./friends/logic.js";
+import { recordActivity } from "./activity/record.js";
+import { registerActivityRoutes } from "./activity/routes.js";
 import {
   myTracksFilter,
   parsePagination,
@@ -450,6 +452,7 @@ export function createApp() {
       }
 
       console.log(`[shares] Piste ${track.id} partagée avec ${userId}`);
+      await recordActivity({ actor: req.auth.sub, type: "track_shared", track: track.id, target: userId });
       res.json(track.toPublic());
     } catch (error) {
       console.error("[shares] Erreur de partage", error);
@@ -511,6 +514,9 @@ export function createApp() {
       }
 
       console.log(`[tracks] Visibilité de ${track.id} : ${visibility}`);
+      if (visibility === "public") {
+        await recordActivity({ actor: req.auth.sub, type: "track_published", track: track.id });
+      }
       res.json(track.toPublic());
     } catch (error) {
       console.error("[tracks] Erreur de changement de visibilité", error);
@@ -559,6 +565,9 @@ export function createApp() {
         });
 
         console.log(`[tracks] Upload enregistré : ${track.id}`);
+        if (visibility === "public") {
+          await recordActivity({ actor: req.auth.sub, type: "track_published", track: track.id });
+        }
         res.status(201).json(track.toPublic());
       } catch (error) {
         console.error("[tracks] Erreur après l'enregistrement du fichier", error);
@@ -639,6 +648,8 @@ export function createApp() {
 
   // TP4 étape 2 : invitations, amis et retrait d'un ami.
   registerFriendRoutes(app, auth);
+  // TP4 étape 3 : fil d'activité des amis.
+  registerActivityRoutes(app, auth);
 
   /** Gestionnaire central des erreurs connues de l'application. */
   app.use((error, _req, res, next) => {

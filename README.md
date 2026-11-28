@@ -39,7 +39,8 @@ stocker, consulter, écouter et supprimer ses propres pistes audio.
 - recherche par titre dans ses pistes, les pistes publiques et les pistes partagées ;
 - page **Découvrir** : pistes publiques récentes et onglet « Partagées avec moi » ;
 - page **Amis** : invitation par email, acceptation, refus, retrait d’un ami ;
-- partage d’une piste privée avec des amis, et arrêt du partage à tout moment.
+- partage d’une piste privée avec des amis, et arrêt du partage à tout moment ;
+- fil **Activité de mes amis** dans Découvrir : pistes publiées et partagées avec moi.
 
 Le détail se trouve dans [`REPORT.md`](REPORT.md) et
 [`md/TP4_CONCEPTION.md`](md/TP4_CONCEPTION.md).
@@ -185,6 +186,7 @@ Toutes les routes sont préfixées par `/api`.
 | `POST` | `/friends/requests/:id/accept` | Accepter une invitation (TP4) |
 | `DELETE` | `/friends/requests/:id` | Refuser / annuler une invitation (TP4) |
 | `DELETE` | `/friends/:userId` | Retirer un ami (TP4) |
+| `GET` | `/activity` | Fil d’activité des amis (TP4) |
 
 Les formats audio acceptés sont MP3, WAV, OGG et M4A, avec une taille
 maximale de 25 Mo.

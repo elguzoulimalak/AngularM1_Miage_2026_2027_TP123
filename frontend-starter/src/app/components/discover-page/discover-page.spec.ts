@@ -1,7 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { provideRouter } from '@angular/router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ActivityItem } from '../../shared/models/activity.model';
 import { Track } from '../../shared/models/track.model';
 import { AuthService } from '../../shared/services/auth.service';
 import { DiscoverPageComponent } from './discover-page';
@@ -20,18 +22,32 @@ const publicTrack: Track = {
 
 const pageOf = (items: Track[]) => ({ items, page: 1, limit: 10, total: items.length, pages: 1 });
 const isPublicList = (r: { url: string }) => r.url === '/api/tracks/public';
+const isActivity = (r: { url: string }) => r.url === '/api/activity';
+
+const sharedEvent: ActivityItem = {
+  id: 'a1',
+  type: 'track_shared',
+  at: '2026-11-28T10:00:00.000Z',
+  user: { id: 'u2', name: 'Alice' },
+  track: { id: 'p9', title: 'Riff funk' },
+};
 
 describe('DiscoverPageComponent', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  // Le fil d'activité est chargé en parallèle ; les tests qui ne le testent
+  // pas répondent par un fil vide avant la vérification.
+  afterEach(() => {
+    http.match(isActivity).forEach((req) => req.flush({ items: [] }));
+    http.verify();
+  });
 
   it('affiche les pistes publiques récentes avec le nom du propriétaire', () => {
     const fixture = TestBed.createComponent(DiscoverPageComponent);
@@ -105,5 +121,49 @@ describe('DiscoverPageComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('Serveur indisponible');
+  });
+
+  it('affiche le fil d’activité des amis', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    http.expectOne(isPublicList).flush(pageOf([]));
+    const req = http.expectOne(isActivity);
+    expect(req.request.params.get('limit')).toBe('8');
+    req.flush({ items: [sharedEvent, { ...sharedEvent, id: 'a2', type: 'track_published', track: { id: 'p1', title: 'Blues en A' } }] });
+    fixture.detectChanges();
+
+    const feed = fixture.nativeElement.querySelector('.feed')?.textContent as string;
+    expect(feed).toContain('Alice vous a partagé « Riff funk »');
+    expect(feed).toContain('Alice a publié « Blues en A »');
+  });
+
+  it('lit une piste depuis le fil d’activité', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isPublicList).flush(pageOf([]));
+    http.expectOne(isActivity).flush({ items: [sharedEvent] });
+
+    // jsdom ne fournit pas URL.createObjectURL : on le simule.
+    const createObjectURL = vi.fn(() => 'blob:riff');
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
+
+    component.play(sharedEvent.track);
+    http.expectOne('/api/tracks/p9/audio').flush(new Blob(['x']));
+    expect(component.playingId()).toBe('p9');
+    expect(component.playingTitle()).toBe('Riff funk');
+    expect(component.audioUrl()).toBe('blob:riff');
+  });
+
+  it('invite à ajouter des amis quand le fil est vide, et signale une erreur', () => {
+    const fixture = TestBed.createComponent(DiscoverPageComponent);
+    const component = fixture.componentInstance;
+    http.expectOne(isPublicList).flush(pageOf([]));
+    http.expectOne(isActivity).flush({ items: [] });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.feed')?.textContent).toContain('Inviter des amis');
+
+    component.loadActivity();
+    http.expectOne(isActivity).flush({ message: 'Erreur serveur' }, { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+    expect(component.activityError()).toBe('Erreur serveur');
   });
 });

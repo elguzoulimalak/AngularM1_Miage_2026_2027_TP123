@@ -120,3 +120,68 @@ Côté frontend, les nouveaux tests couvrent :
 2. A partage une piste privée avec B. B la voit dans Découvrir, onglet « Partagées avec moi », et peut l'écouter.
 3. A décoche B. B ne voit plus la piste, et la lecture renvoie `404`.
 4. A partage de nouveau, puis retire B de ses amis. Le partage disparaît aussi.
+
+Vérification manuelle faite par l'équipe sur MongoDB Atlas : invitation, acceptation, partage, lecture et révocation. Tout fonctionne.
+
+## Étape 3 : fil d'activité des amis
+
+### Travail effectué
+
+**Backend (`backend/`)**
+- `models/Activity.js` (nouveau) : journal `{ actor, type: track_published | track_shared, track, target, createdAt }`, avec un index `{ actor, createdAt }`.
+- `src/activity/record.js` : `recordActivity()` enregistre un événement en « best effort ». Une erreur est journalisée sans faire échouer l'upload ou le partage.
+- Les événements sont enregistrés à trois moments :
+  - upload d'une piste publique ;
+  - passage d'une piste en public (`PATCH`) ;
+  - partage avec un ami (`PUT .../shares/:userId`).
+- `src/activity/logic.js` : fonctions pures `parseFeedLimit`, `friendIdsOf`, `feedFilter`, `isStillVisible` et `buildFeed`.
+- `src/activity/routes.js` : `GET /api/activity?limit=`. La route récupère les amis acceptés, lit leurs événements (publications, et partages faits avec moi), puis filtre ceux qui ne sont plus valables, supprime les doublons et applique la limite.
+- `API_CONTRACT.md` et `README.md` sont mis à jour.
+
+**Frontend (`frontend-starter/`)**
+- Modèle `ActivityItem` et `FriendService.activity(limit)`.
+- **Découvrir** : un bloc « Activité de mes amis » à droite (en dessous sur mobile), avec un bouton Actualiser. On y lit « Alice vous a partagé « Riff funk » » ou « Bob a publié « Blues lent en E » », avec la date et un bouton de lecture. Si le fil est vide, un lien invite à ajouter des amis.
+
+### Choix techniques
+
+- **Un journal d'événements plutôt qu'un calcul à partir des pistes.** `Track` ne garde ni la date de passage en public ni la date d'un partage : `createdAt` est la date d'upload, et `updatedAt` change à chaque modification. Le journal garde la vraie date de chaque action.
+- **Le journal n'est jamais modifié, le filtrage se fait à la lecture** (`isStillVisible`). Arrêter un partage, rendre une piste privée ou la supprimer fait disparaître l'événement du fil, sans code supplémentaire dans ces routes. Retirer un ami aussi, puisque le fil ne lit que les événements des amis actuels.
+- **Confidentialité** : je ne vois que les partages faits **avec moi**, jamais ceux faits avec d'autres personnes. La réponse ne contient ni `sharedWith` ni la visibilité.
+- **Doublons** : si une piste passe plusieurs fois en public, seul l'événement le plus récent est gardé.
+- **Lecture de `limit × 3` événements** avant le filtrage, pour que le fil reste plein même si certains événements sont écartés. C'est un compromis simple. Sur un très gros volume, il faudrait paginer.
+- **« Best effort » pour l'écriture** : l'action principale a déjà réussi, donc une panne du journal ne doit pas la faire échouer. Elle est journalisée côté serveur.
+
+### Résultats des tests
+
+| Partie | Commande | Résultat |
+|---|---|---|
+| Backend | `cd backend && npm test` | **51 / 51** réussis (12 nouveaux dans `test/tp4-activity.test.js`) |
+| Frontend | `cd frontend-starter && npm test` | **48 / 48** réussis (4 nouveaux) |
+| Frontend | `npm run build` | build OK, sans avertissement |
+
+Côté backend, les nouveaux tests couvrent :
+- les bornes de `limit` ;
+- le calcul des amis ;
+- le filtre MongoDB ;
+- `isStillVisible` : piste supprimée, redevenue privée, plus partagée, ou changée de propriétaire ;
+- la suppression des doublons et la limite ;
+- `recordActivity`, qui n'échoue pas si l'écriture échoue ;
+- `GET /api/activity` : `401`, fil vide sans amis (sans lecture du journal), filtrage des événements invalides, pas de `sharedWith` dans la réponse ;
+- l'enregistrement de `track_published` lors d'un `PATCH` public (et rien lors d'un `PATCH` privé) ;
+- l'enregistrement de `track_shared` avec le destinataire.
+
+Les tests des étapes 1 et 2 simulent maintenant `Activity.create`, ce qui évite toute écriture MongoDB pendant les tests.
+
+Côté frontend, les nouveaux tests couvrent :
+- `FriendService.activity()` ;
+- l'affichage du fil ;
+- la lecture d'une piste depuis le fil ;
+- le fil vide (lien vers Amis) et l'erreur serveur.
+
+### À vérifier manuellement (MongoDB Atlas)
+
+1. A et B sont amis. A rend une piste publique : B voit « A a publié … » dans Découvrir.
+2. A partage une piste privée avec B : B voit « A vous a partagé … » et peut l'écouter depuis le fil.
+3. A arrête le partage ou rend la piste privée : après « Actualiser », l'événement disparaît chez B.
+
+Note : les actions faites avant cette étape n'apparaissent pas dans le fil, car le journal commence avec cette version.

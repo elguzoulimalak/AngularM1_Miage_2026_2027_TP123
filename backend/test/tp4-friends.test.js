@@ -10,6 +10,7 @@ import mongoose from "mongoose";
 import { createApp } from "../src/app.js";
 import { Friendship } from "../src/models/Friendship.js";
 import { Track } from "../src/models/Track.js";
+import { Activity } from "../src/models/Activity.js";
 import { User } from "../src/models/User.js";
 import {
   friendshipBetweenFilter,
@@ -38,6 +39,8 @@ test.before(async () => {
 });
 
 test.after(() => server.close());
+// Le journal d'activité (étape 3) est simulé : pas d'écriture MongoDB.
+test.beforeEach(() => mock.method(Activity, "create", () => Promise.resolve({})));
 test.afterEach(() => mock.restoreAll());
 
 const call = (method, url, body) =>
